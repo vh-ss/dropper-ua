@@ -406,12 +406,15 @@ function money(n,cur){ return fmt(n)+" "+(CUR_SYM[cur]||cur); }
 /* ============ calc ============ */
 // All money math is normalised to the base currency. Cost and sale price can each
 // have their own currency (it.costCur / it.priceCur); fall back to base if absent.
-function toBase(amount,cur){ const r=db.settings.rates[cur]; return amount*(r==null?1:r); }
+// An order snapshots the exchange rates at the time it was recorded (o.rates), so
+// later rate updates don't change past orders. Legacy orders fall back to live rates.
+function orderRates(o){ return (o&&o.rates) || db.settings.rates; }
+function toBase(amount,cur,rates){ rates=rates||db.settings.rates; const r=rates[cur]; return amount*(r==null?1:r); }
 function itemQty(it){ return Number(it.qty)||1; }
-function itemTotal(it){ return toBase(Number(it.priceForClient)||0, it.priceCur||db.settings.base)*itemQty(it); } // base
-function itemCost(it){ return toBase(Number(it.cost)||0, it.costCur||db.settings.base)*itemQty(it); }            // base
-function orderTotal(o){ return (o.items||[]).reduce((s,i)=>s+itemTotal(i),0); }   // revenue in base
-function orderCost(o){ return (o.items||[]).reduce((s,i)=>s+itemCost(i),0); }     // cost in base
+function itemTotal(it,rates){ return toBase(Number(it.priceForClient)||0, it.priceCur||db.settings.base, rates)*itemQty(it); } // base
+function itemCost(it,rates){ return toBase(Number(it.cost)||0, it.costCur||db.settings.base, rates)*itemQty(it); }            // base
+function orderTotal(o){ const r=orderRates(o); return (o.items||[]).reduce((s,i)=>s+itemTotal(i,r),0); }   // revenue in base
+function orderCost(o){ const r=orderRates(o); return (o.items||[]).reduce((s,i)=>s+itemCost(i,r),0); }     // cost in base
 function orderProfit(o){ return orderTotal(o)-orderCost(o); }                     // profit in base
 function clientById(id){ return db.clients.find(c=>c.id===id); }
 function storeById(id){ return db.stores.find(s=>s.id===id); }
@@ -426,8 +429,8 @@ function orderClientsLabel(o){
 function orderPaidState(o){ const its=o.items||[]; if(!its.length)return 'none';
   const p=its.filter(i=>i.paid).length; return p===0?'none':p===its.length?'all':'partial'; }
 function clientItems(o,cid){ return (o.items||[]).filter(i=>i.clientId===cid); }
-function clientSubtotalBase(o,cid){ return clientItems(o,cid).reduce((s,i)=>s+itemTotal(i),0); }
-function clientUnpaidBase(cid){ let s=0; db.orders.forEach(o=>clientItems(o,cid).forEach(i=>{ if(!i.paid)s+=itemTotal(i); })); return s; }
+function clientSubtotalBase(o,cid){ const r=orderRates(o); return clientItems(o,cid).reduce((s,i)=>s+itemTotal(i,r),0); }
+function clientUnpaidBase(cid){ let s=0; db.orders.forEach(o=>{ const r=orderRates(o); clientItems(o,cid).forEach(i=>{ if(!i.paid)s+=itemTotal(i,r); }); }); return s; }
 function clientLabel(c){ if(!c)return t('unknownClient'); return c.fullName||c.nick||((c.socials||[])[0]&&c.socials[0].val)||((c.phones||[])[0])||t('noName'); }
 function socialUrl(net,val){
   val=(val||'').trim(); if(!val)return '';
@@ -540,9 +543,11 @@ function cycleStatus(id){
   save(); renderOrders();
 }
 
+let editOrderRates=null; // rate snapshot used for the order being edited
 function openOrder(id){
   const o = id ? db.orders.find(x=>x.id===id) : null;
   const base = db.settings.base;
+  editOrderRates = (o&&o.rates) || db.settings.rates; // existing orders keep their locked rate
   editingOrderItems = o ? JSON.parse(JSON.stringify(o.items||[])) : [{title:'',article:'',size:'',qty:1,cost:'',costCur:'USD',priceForClient:'',priceCur:base,clientId:'',paid:false,link:'',photo:''}];
   const storeOpts = db.stores.map(s=>`<option value="${s.id}" ${o&&o.storeId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
   const sheet=document.getElementById('sheet');
@@ -583,8 +588,9 @@ function curSelect(idx,key,sel){
 function renderItemEditors(){
   const base=db.settings.base;
   const wrap=document.getElementById('itemsWrap');
-  wrap.innerHTML=editingOrderItems.map((it,idx)=>{
-    const profB=itemTotal(it)-itemCost(it); // per-item profit in base
+  wrap.innerHTML=`<datalist id="clientsDL">${db.clients.map(c=>`<option value="${esc(clientLabel(c))}">`).join('')}</datalist>`
+    +editingOrderItems.map((it,idx)=>{
+    const profB=itemTotal(it,editOrderRates)-itemCost(it,editOrderRates); // per-item profit in base
     const has=(it.cost||it.priceForClient);
     return `
     <div class="itemcard">
@@ -592,10 +598,7 @@ function renderItemEditors(){
       <div class="field"><label>${t('title')}</label><input value="${esc(it.title)}" oninput="updItem(${idx},'title',this.value)"></div>
       <div class="field"><label>${t('client')}</label>
         <div class="linkrow">
-          <select onchange="updItem(${idx},'clientId',this.value)" style="flex:1; min-width:0; background:var(--card); border:1px solid var(--border); color:var(--text); padding:11px 10px; border-radius:12px">
-            <option value="">${t('chooseClient')}</option>
-            ${db.clients.map(c=>`<option value="${c.id}" ${it.clientId===c.id?'selected':''}>${esc(clientLabel(c))}</option>`).join('')}
-          </select>
+          <input list="clientsDL" value="${esc(it.clientId?clientLabel(clientById(it.clientId)):'')}" oninput="pickItemClient(${idx},this.value)" placeholder="${t('chooseClient')}" style="flex:1; min-width:0">
           <button class="btn sm sec" onclick="quickAddItemClient(${idx})">${t('newClientInline')}</button>
         </div>
       </div>
@@ -649,7 +652,7 @@ function attachPhoto(idx,input){
 }
 function updItemProfit(idx){
   const el=document.getElementById('itemprof_'+idx); if(!el) return;
-  const it=editingOrderItems[idx], base=db.settings.base, p=itemTotal(it)-itemCost(it);
+  const it=editingOrderItems[idx], base=db.settings.base, p=itemTotal(it,editOrderRates)-itemCost(it,editOrderRates);
   el.innerHTML=(it.cost||it.priceForClient)?`${t('orderProfit')}: <b class="${p>=0?'profit':'loss'}">${money(p,base)}</b>`:'';
 }
 function addItemRow(){
@@ -657,6 +660,11 @@ function addItemRow(){
   const cur=(last&&last.costCur)||'USD'; // reuse previous item's purchase currency as a convenience
   editingOrderItems.push({title:'',article:'',size:'',qty:1,cost:'',costCur:cur,priceForClient:'',priceCur:db.settings.base,clientId:'',paid:false,link:'',photo:''});
   renderItemEditors();
+}
+function pickItemClient(idx,val){ // resolve typed/selected client label → id (autocomplete via datalist)
+  const v=(val||'').trim().toLowerCase();
+  const c=db.clients.find(x=>clientLabel(x).toLowerCase()===v);
+  editingOrderItems[idx].clientId = c?c.id:null;
 }
 function quickAddItemClient(idx){
   const name=prompt(t('fullName'));
@@ -670,8 +678,8 @@ function quickAddItemClient(idx){
 function removeItemRow(i){ editingOrderItems.splice(i,1); if(!editingOrderItems.length)addItemRow(); else renderItemEditors(); }
 function updOrderTotBar(){
   const base=db.settings.base;
-  const tot=editingOrderItems.reduce((s,i)=>s+itemTotal(i),0);
-  const cost=editingOrderItems.reduce((s,i)=>s+itemCost(i),0);
+  const tot=editingOrderItems.reduce((s,i)=>s+itemTotal(i,editOrderRates),0);
+  const cost=editingOrderItems.reduce((s,i)=>s+itemCost(i,editOrderRates),0);
   const prof=tot-cost;
   document.getElementById('orderTotBar').innerHTML=
     `<div style="width:100%; display:flex; flex-direction:column; gap:5px">
@@ -683,6 +691,10 @@ function updOrderTotBar(){
 function saveOrder(id){
   const storeId=document.getElementById('f_store').value||null;
   const st=storeId&&storeById(storeId);
+  const existing=id&&db.orders.find(x=>x.id===id);
+  // lock the FX rate at record time: snapshot on create, keep it on later edits
+  const rates=(existing&&existing.rates) || Object.assign({}, db.settings.rates);
+  const rateBase=(existing&&existing.rateBase) || db.settings.base;
   const o={
     id: id||uid(),
     storeId: storeId,
@@ -691,6 +703,7 @@ function saveOrder(id){
     purchaseDate: document.getElementById('f_date').value,
     status: parseInt(document.getElementById('f_status').value)||0,
     trackingNumber: document.getElementById('f_track').value.trim(),
+    rates: rates, rateBase: rateBase,
     items: editingOrderItems.filter(i=>i.title||i.priceForClient||i.cost).map(i=>({
       title:i.title.trim?i.title.trim():i.title, article:i.article, size:i.size,
       qty:Number(i.qty)||1,
@@ -1120,12 +1133,12 @@ function renderIncome(){
   // revenue/profit by store (per order) and by client (per item, since clients are per item)
   const byStore={}, byClient={};
   orders.forEach(o=>{
-    const sn=storeName(o);
+    const sn=storeName(o), rr=orderRates(o);
     (byStore[sn]=byStore[sn]||{rev:0,prof:0}); byStore[sn].rev+=orderTotal(o); byStore[sn].prof+=orderProfit(o);
     (o.items||[]).forEach(it=>{
       const cn=it.clientId?clientLabel(clientById(it.clientId)):t('noClient');
       (byClient[cn]=byClient[cn]||{rev:0,prof:0});
-      byClient[cn].rev+=itemTotal(it); byClient[cn].prof+=itemTotal(it)-itemCost(it);
+      byClient[cn].rev+=itemTotal(it,rr); byClient[cn].prof+=itemTotal(it,rr)-itemCost(it,rr);
     });
   });
   const curList=obj=>Object.entries(obj).filter(([,v])=>v).map(([c,v])=>
@@ -1203,12 +1216,16 @@ function renderSettings(){
 }
 // Switching base is safe: each amount stores its own currency. We re-express all
 // stored rates relative to the new base so existing figures stay consistent.
+function rebaseRates(r,c){ // re-express a rate map relative to currency c (1 c = 1)
+  const div=r[c]; if(!div) { const nr=Object.assign({},r); nr[c]=1; return nr; }
+  const nr={}; CURRENCIES.forEach(x=>{ nr[x]=+( (r[x]==null?1:r[x]) / div ).toFixed(6); }); nr[c]=1; return nr;
+}
 function changeBase(c){
-  const r=db.settings.rates, old=db.settings.base;
+  const old=db.settings.base;
   if(c===old) return;
-  const div=r[c]; // value of 1 unit of new base, in old base
-  if(div){ const nr={}; CURRENCIES.forEach(x=>{ nr[x]=+( (r[x]==null?1:r[x]) / div ).toFixed(6); }); nr[c]=1; db.settings.rates=nr; }
-  else { db.settings.rates[c]=1; }
+  db.settings.rates=rebaseRates(db.settings.rates,c);
+  // keep each order's locked snapshot consistent (preserves purchase-day ratios)
+  db.orders.forEach(o=>{ if(o.rates){ o.rates=rebaseRates(o.rates,c); o.rateBase=c; } });
   db.settings.base=c; save(); renderSettings(); renderIncome();
 }
 function setRate(c,v){ const n=parseFloat(v); if(!isNaN(n)){ db.settings.rates[c]=n; save(); renderIncome(); } }
