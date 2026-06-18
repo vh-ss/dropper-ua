@@ -266,7 +266,7 @@ const I18N = {
     // settings
     language:"Мова", baseCurrency:"Базова валюта", rates:"Курси валют",
     rateHint:"Скільки базової валюти за 1 одиницю:",
-    baseSetOnce:"Обери базову валюту один раз — після першого замовлення зміна заблокується.",
+    baseSetOnce:"Валюта, в якій ведеться зведення. Можна змінити будь-коли — курси перерахуються автоматично.",
     baseLockedNote:"🔒 Базова валюта зафіксована (вже є замовлення) — щоб не ламати перерахунки.",
     monoRates:"Оновити курси з монобанку", monoOk:"Курси оновлено з монобанку",
     monoErr:"Не вдалось отримати курси (немає інтернету або ліміт 1 запит/хв). Спробуй за хвилину.",
@@ -324,7 +324,7 @@ const I18N = {
     byStatus:"By status", unpaidClients:"Unpaid", ordersCount:"Orders",
     language:"Language", baseCurrency:"Base currency", rates:"Exchange rates",
     rateHint:"How much base currency per 1 unit:",
-    baseSetOnce:"Choose the base currency once — it locks after the first order.",
+    baseSetOnce:"Currency the reporting is shown in. Change it anytime — rates are recomputed automatically.",
     baseLockedNote:"🔒 Base currency is locked (orders exist) to keep conversions consistent.",
     monoRates:"Update rates from monobank", monoOk:"Rates updated from monobank",
     monoErr:"Couldn't fetch rates (no internet or rate limit 1 req/min). Try in a minute.",
@@ -1165,10 +1165,10 @@ function renderSettings(){
   document.getElementById('settingsView').innerHTML=`
     <div class="card">
       <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
-      <select class="search" style="width:100%" id="set_base" onchange="changeBase(this.value)" ${baseLocked()?'disabled':''}>
+      <select class="search" style="width:100%" id="set_base" onchange="changeBase(this.value)">
         ${CURRENCIES.map(c=>`<option ${s.base===c?'selected':''}>${c}</option>`).join('')}
       </select>
-      <div class="sub" style="margin-top:8px">${baseLocked()?t('baseLockedNote'):t('baseSetOnce')}</div>
+      <div class="sub" style="margin-top:8px">${t('baseSetOnce')}</div>
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:4px">${t('rates')}</div>
@@ -1194,8 +1194,16 @@ function renderSettings(){
       <div class="sub">${t('installHint')}</div>
     </div>`;
 }
-function baseLocked(){ return db.orders.length>0; } // fix base once orders exist → stable conversions
-function changeBase(c){ if(baseLocked())return; db.settings.base=c; db.settings.rates[c]=1; save(); renderSettings(); renderIncome(); }
+// Switching base is safe: each amount stores its own currency. We re-express all
+// stored rates relative to the new base so existing figures stay consistent.
+function changeBase(c){
+  const r=db.settings.rates, old=db.settings.base;
+  if(c===old) return;
+  const div=r[c]; // value of 1 unit of new base, in old base
+  if(div){ const nr={}; CURRENCIES.forEach(x=>{ nr[x]=+( (r[x]==null?1:r[x]) / div ).toFixed(6); }); nr[c]=1; db.settings.rates=nr; }
+  else { db.settings.rates[c]=1; }
+  db.settings.base=c; save(); renderSettings(); renderIncome();
+}
 function setRate(c,v){ const n=parseFloat(v); if(!isNaN(n)){ db.settings.rates[c]=n; save(); renderIncome(); } }
 // Monobank public currency API (rates vs UAH). Cross-converts to current base. Limit: 1 req/min.
 const MONO_CODES={840:'USD',978:'EUR',985:'PLN'};
