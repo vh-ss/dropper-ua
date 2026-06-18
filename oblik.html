@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#6d28d9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Облік / Buyer Tracker</title>
+<style>
+  :root{
+    --bg:#0f1020; --card:#1b1c33; --card2:#232544; --accent:#7c3aed; --accent2:#a78bfa;
+    --text:#eef0ff; --muted:#9aa0c7; --good:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+    --border:#2c2e52; --shadow:0 6px 20px rgba(0,0,0,.35); --appW:480px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  /* Page backdrop behind the centered app column (visible on desktop) */
+  html{background:#06060f}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text); padding-bottom:78px; font-size:15px; line-height:1.4;
+    max-width:var(--appW); margin:0 auto; position:relative; min-height:100vh;
+    box-shadow:0 0 80px rgba(0,0,0,.6);
+  }
+  header{
+    position:sticky; top:0; z-index:20; background:linear-gradient(135deg,#6d28d9,#4338ca);
+    padding:12px 14px; box-shadow:var(--shadow); display:flex; align-items:center; gap:10px;
+  }
+  header h1{font-size:17px; margin:0; flex:1; font-weight:700}
+  .lang-toggle{display:flex; background:rgba(255,255,255,.15); border-radius:20px; overflow:hidden}
+  .lang-toggle button{background:none; border:none; color:#fff; padding:6px 12px; font-size:13px; font-weight:600}
+  .lang-toggle button.active{background:rgba(255,255,255,.9); color:#4338ca}
+  main{padding:12px 12px 0}
+  .tab{display:none}
+  .tab.active{display:block; animation:fade .2s}
+  @keyframes fade{from{opacity:0; transform:translateY(6px)}to{opacity:1}}
+  .toolbar{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap}
+  input,select,textarea,button{font-family:inherit; font-size:15px}
+  .search{
+    flex:1; min-width:120px; background:var(--card); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:12px; outline:none;
+  }
+  select.search{flex:0 0 auto; min-width:auto}
+  .btn{
+    background:var(--accent); color:#fff; border:none; padding:11px 14px; border-radius:12px;
+    font-weight:600; box-shadow:var(--shadow);
+  }
+  .btn.sec{background:var(--card2); color:var(--text)}
+  .btn.ghost{background:transparent; border:1px solid var(--border); color:var(--text); box-shadow:none}
+  .btn.sm{padding:7px 10px; font-size:13px; border-radius:10px; box-shadow:none}
+  .btn.danger{background:#3a1620; color:#ff9aa6; border:1px solid #5b2330}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px;
+    margin-bottom:12px; box-shadow:var(--shadow);
+  }
+  .card .row{display:flex; justify-content:space-between; align-items:flex-start; gap:8px}
+  .muted{color:var(--muted); font-size:13px}
+  .pill{display:inline-block; padding:3px 9px; border-radius:20px; font-size:12px; font-weight:600}
+  .pill.st0{background:#3a2f1a; color:#fcd34d}
+  .pill.st1{background:#1a2f3a; color:#7dd3fc}
+  .pill.st2{background:#2a1a3a; color:#c4b5fd}
+  .pill.st3{background:#1a3a2a; color:#86efac}
+  .pill.st4{background:#1a3a35; color:#5eead4}
+  .pill.paid{background:#13351f; color:#86efac}
+  .pill.unpaid{background:#3a1620; color:#fca5a5}
+  .big{font-size:18px; font-weight:700}
+  .profit{color:var(--good); font-weight:700}
+  .loss{color:var(--bad); font-weight:700}
+  .sub{font-size:13px; color:var(--muted); margin:2px 0}
+  a{color:var(--accent2)}
+  .empty{text-align:center; color:var(--muted); padding:40px 10px}
+  .empty .e{font-size:40px; margin-bottom:8px}
+  /* bottom nav */
+  nav{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:var(--appW);
+    z-index:30; display:flex;
+    background:#15162b; border-top:1px solid var(--border); padding:6px 4px 8px;
+  }
+  nav button{
+    flex:1; background:none; border:none; color:var(--muted); display:flex; flex-direction:column;
+    align-items:center; gap:2px; font-size:11px; padding:4px 0;
+  }
+  nav button.active{color:var(--accent2)}
+  nav .ic{font-size:21px; line-height:1}
+  /* modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(5,5,15,.7); z-index:50; display:none;
+    align-items:flex-end; justify-content:center;
+  }
+  .overlay.open{display:flex}
+  .sheet{
+    background:var(--bg); width:100%; max-width:var(--appW); max-height:92vh; overflow-y:auto;
+    border-radius:20px 20px 0 0; padding:16px 14px 28px; box-shadow:0 -10px 40px rgba(0,0,0,.5);
+  }
+  .sheet h2{margin:4px 0 14px; font-size:18px}
+  .field{margin-bottom:11px}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600}
+  .field input,.field select,.field textarea{
+    width:100%; background:var(--card); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:12px; outline:none;
+  }
+  .field textarea{min-height:54px; resize:vertical}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px}
+  .itemcard{background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:11px; margin-bottom:10px; position:relative}
+  .itemcard .del{position:absolute; top:8px; right:8px}
+  .sheet-actions{display:flex; gap:10px; margin-top:8px}
+  .sheet-actions .btn{flex:1}
+  .check{display:flex; align-items:center; gap:8px}
+  .check input{width:20px; height:20px}
+  .totbar{background:var(--card2); border-radius:12px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between}
+  .hist-row{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--border); font-size:13px}
+  .delta-down{color:var(--good); font-weight:700}
+  .delta-up{color:var(--bad); font-weight:700}
+  .delta-none{color:var(--muted)}
+  .stat{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border)}
+  .stat:last-child{border-bottom:none}
+  .note{background:#1a2030; border:1px solid #2a3550; color:#aeb9e0; font-size:12.5px; border-radius:12px; padding:10px 12px; margin-bottom:12px}
+  .linkrow{display:flex; gap:6px; align-items:center}
+  .swatch{font-size:12px; color:var(--muted)}
+  /* work-queue chips */
+  .chips{display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; -webkit-overflow-scrolling:touch}
+  .chip{flex:0 0 auto; background:var(--card); border:1px solid var(--border); color:var(--muted);
+    padding:7px 12px; border-radius:20px; font-size:13px; font-weight:600; white-space:nowrap}
+  .chip.active{background:var(--accent); border-color:var(--accent); color:#fff}
+  .chip b{color:inherit}
+  .chip.warn{border-color:#5b2330; color:#fca5a5}
+  .chip.warn.active{background:#b91c1c; border-color:#b91c1c; color:#fff}
+  /* status pill is tappable to advance */
+  .pill.tap{cursor:pointer; user-select:none}
+  /* monthly bar chart */
+  .chart{display:flex; align-items:flex-end; gap:6px; height:130px; padding-top:14px; overflow-x:auto}
+  .chart .col{flex:1 0 26px; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end}
+  .chart .bar{width:60%; min-height:2px; background:linear-gradient(180deg,var(--accent2),var(--accent)); border-radius:5px 5px 0 0; position:relative}
+  .chart .bar.neg{background:linear-gradient(180deg,#f87171,#b91c1c)}
+  .chart .bval{font-size:10px; color:var(--muted); position:absolute; top:-13px; left:50%; transform:translateX(-50%); white-space:nowrap}
+  .chart .blab{font-size:10px; color:var(--muted)}
+  /* photo thumbnails */
+  .thumb{width:42px; height:42px; border-radius:8px; object-fit:cover; border:1px solid var(--border); background:var(--card2)}
+  .thumbs{display:flex; gap:5px; margin-top:8px; flex-wrap:wrap}
+  .photo-edit{width:64px; height:64px; border-radius:10px; object-fit:cover; border:1px solid var(--border)}
+  .card.debt{border-left:3px solid var(--bad)}
+  .owe-banner{background:#2a1620; border:1px solid #5b2330; color:#fca5a5; border-radius:12px; padding:10px 12px; margin-bottom:12px; display:flex; justify-content:space-between; font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="appTitle">Облік викупів</h1>
+  <div class="lang-toggle">
+    <button id="langUa" onclick="setLang('ua')">UA</button>
+    <button id="langEn" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<main>
+  <!-- ORDERS -->
+  <section id="tab-orders" class="tab active">
+    <div class="toolbar">
+      <input id="orderSearch" class="search" oninput="renderOrders()" placeholder="">
+    </div>
+    <div id="orderChips" class="chips"></div>
+    <button class="btn" style="width:100%; margin-bottom:12px" onclick="openOrder()">+ <span data-t="addOrder"></span></button>
+    <div id="ordersList"></div>
+  </section>
+
+  <!-- CLIENTS -->
+  <section id="tab-clients" class="tab">
+    <div class="toolbar">
+      <input id="clientSearch" class="search" oninput="renderClients()" placeholder="">
+    </div>
+    <button class="btn" style="width:100%; margin-bottom:12px" onclick="openClient()">+ <span data-t="addClient"></span></button>
+    <div id="clientsList"></div>
+  </section>
+
+  <!-- STORES -->
+  <section id="tab-stores" class="tab">
+    <div class="toolbar">
+      <input id="storeSearch" class="search" oninput="renderStores()" placeholder="">
+    </div>
+    <button class="btn" style="width:100%; margin-bottom:12px" onclick="openStore()">+ <span data-t="addStore"></span></button>
+    <div id="storesList"></div>
+  </section>
+
+  <!-- WATCHES -->
+  <section id="tab-watches" class="tab">
+    <div class="toolbar">
+      <button class="btn sec" style="flex:1" onclick="updatePricesBulk()">🔄 <span data-t="updatePrices"></span></button>
+      <button class="btn" style="flex:1" onclick="openWatch()">+ <span data-t="addWatch"></span></button>
+    </div>
+    <div class="note" data-t="watchNote"></div>
+    <div id="watchesList"></div>
+  </section>
+
+  <!-- INCOME -->
+  <section id="tab-income" class="tab">
+    <div id="incomeControls"></div>
+    <div id="incomeView"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab">
+    <div id="settingsView"></div>
+  </section>
+</main>
+
+<nav>
+  <button id="nav-orders" class="active" onclick="switchTab('orders')"><span class="ic">📦</span><span data-t="navOrders"></span></button>
+  <button id="nav-clients" onclick="switchTab('clients')"><span class="ic">👥</span><span data-t="navClients"></span></button>
+  <button id="nav-stores" onclick="switchTab('stores')"><span class="ic">🏬</span><span data-t="navStores"></span></button>
+  <button id="nav-watches" onclick="switchTab('watches')"><span class="ic">📉</span><span data-t="navWatches"></span></button>
+  <button id="nav-income" onclick="switchTab('income')"><span class="ic">💰</span><span data-t="navIncome"></span></button>
+  <button id="nav-settings" onclick="switchTab('settings')"><span class="ic">⚙️</span><span data-t="navSettings"></span></button>
+</nav>
+
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+
+<script>
+/* ============ i18n ============ */
+const I18N = {
+  ua:{
+    appTitle:"Облік викупів", navOrders:"Замовлення", navClients:"Клієнти", navStores:"Магазини", navWatches:"Ціни",
+    navIncome:"Дохід", navSettings:"Дані",
+    addOrder:"Замовлення", addClient:"Клієнт", addStore:"Магазин", addWatch:"Товар", updatePrices:"Оновити ціни",
+    searchOrders:"Пошук: клієнт, магазин, №, трек…", searchClients:"Пошук клієнта…", searchStores:"Пошук магазину…",
+    chooseStore:"— оберіть магазин —", newStoreInline:"+ Новий", newStore:"Новий магазин", editStore:"Магазин",
+    storeName:"Назва магазину", storeUrl:"Сайт", emptyStores:"Магазинів ще немає",
+    confirmDelStore:"Видалити магазин? Замовлення залишаться зі збереженою назвою.",
+    byStore:"По магазинах", byClient:"По клієнтах",
+    allStatuses:"Всі статуси",
+    st:["Нове","Викуплено","В дорозі","Отримано","Видано клієнту"],
+    paid:"Оплачено", unpaid:"Не оплачено", partial:"Частково", clientsWord:"клієнтів",
+    watchNote:"Кнопка «Оновити ціни»: за наявності інтернету пробує підтягнути ціну за посиланням (працює не на всіх сайтах через захист). Якщо не вдалось — введеш вручну. Працює і офлайн.",
+    // order form
+    newOrder:"Нове замовлення", editOrder:"Редагувати замовлення",
+    client:"Клієнт", chooseClient:"— оберіть клієнта —", newClientInline:"+ Новий", noClient:"Без клієнта",
+    store:"Магазин / сайт", orderNo:"№ замовлення", purchaseDate:"Дата викупу",
+    currency:"Валюта", status:"Статус", tracking:"Трек-номер", clientPaidQ:"Клієнт оплатив",
+    items:"Товари", addItem:"+ Додати товар",
+    title:"Назва товару", article:"Артикул", size:"Розмір", qty:"К-сть",
+    cost:"Закупка", priceForClient:"Ціна клієнту", link:"Посилання", photo:"Фото",
+    orderTotal:"Сума замовлення", orderProfit:"Прибуток",
+    chartProfit:"Прибуток по місяцях", totalOwed:"Всього винні", fromLabel:"З", toLabel:"По",
+    periodPrev:"Минулий місяць", queueAll:"Всі",
+    save:"Зберегти", cancel:"Скасувати", del:"Видалити", edit:"Редагувати",
+    // client form
+    newClient:"Новий клієнт", editClient:"Клієнт",
+    fullName:"ПІБ (прізвище, ім'я, по батькові)", nick:"Нік / мітка (необов.)", notes:"Нотатки",
+    phones:"Телефони", addPhone:"+ Телефон", phone:"Номер телефону",
+    socials:"Соцмережі", addSocial:"+ Соцмережа", handle:"Нік або посилання",
+    addresses:"Адреси доставки", addAddress:"+ Адреса", addressVal:"Адреса / № відділення",
+    ordersOf:"Замовлень", owes:"Борг", openLink:"Відкрити",
+    fillSomething:"Вкажи хоча б ПІБ або контакт",
+    netNames:{instagram:"Instagram",tiktok:"TikTok",threads:"Threads",facebook:"Facebook",telegram:"Telegram",other:"Інше"},
+    delivNames:{novaposhta:"Нова Пошта",ukrposhta:"Укрпошта",meest:"Meest",rozetka:"Rozetka",courier:"Кур'єр",pickup:"Самовивіз",other:"Інше"},
+    // watch
+    newWatch:"Відстежуваний товар", editWatch:"Товар", currentPrice:"Поточна ціна",
+    updatePrice:"Оновити ціну", priceHistory:"Історія цін", enterNewPrice:"Введіть нову ціну",
+    noChange:"без змін",
+    // income
+    periodAll:"За весь час", periodMonth:"Цей місяць",
+    totalRevenue:"Загальний оборот", totalProfit:"Загальний прибуток",
+    byCurrency:"По валютах", inBase:"Разом у базовій валюті",
+    received:"Отримано (продаж)", spent:"Витрачено (закупка)",
+    byStatus:"По статусах", unpaidClients:"Не оплатили", ordersCount:"Замовлень",
+    // settings
+    language:"Мова", baseCurrency:"Базова валюта", rates:"Курси валют",
+    rateHint:"Скільки базової валюти за 1 одиницю:",
+    baseSetOnce:"Обери базову валюту один раз — після першого замовлення зміна заблокується.",
+    baseLockedNote:"🔒 Базова валюта зафіксована (вже є замовлення) — щоб не ламати перерахунки.",
+    monoRates:"Оновити курси з монобанку", monoOk:"Курси оновлено з монобанку",
+    monoErr:"Не вдалось отримати курси (немає інтернету або ліміт 1 запит/хв). Спробуй за хвилину.",
+    ratesUpdated:"Оновлено", monoLoading:"Завантаження курсів…",
+    dataMgmt:"Дані", export:"Експорт у файл", import:"Імпорт з файлу",
+    clearAll:"Очистити всі дані", install:"Встановлення",
+    installHint:"Відкрий цей файл у браузері телефона → меню → «Додати на головний екран».",
+    confirmDelOrder:"Видалити це замовлення?", confirmDelClient:"Видалити клієнта? Його замовлення залишаться без клієнта.",
+    confirmDelWatch:"Видалити товар з трекінгу?", confirmClear:"Видалити ВСІ дані без відновлення?",
+    needClient:"Спочатку додай клієнта.", emptyOrders:"Замовлень ще немає", emptyClients:"Клієнтів ще немає",
+    emptyWatches:"Список трекінгу порожній", noName:"Без назви", unknownClient:"Без клієнта",
+    autoTrying:"Пробую підтягнути ціни…", autoFail:"Автоматично не вдалось — введи вручну",
+    profitWord:"приб.",
+  },
+  en:{
+    appTitle:"Buyer Tracker", navOrders:"Orders", navClients:"Clients", navStores:"Stores", navWatches:"Prices",
+    navIncome:"Income", navSettings:"Data",
+    addOrder:"Order", addClient:"Client", addStore:"Store", addWatch:"Item", updatePrices:"Update prices",
+    searchOrders:"Search: client, store, №, tracking…", searchClients:"Search client…", searchStores:"Search store…",
+    chooseStore:"— choose store —", newStoreInline:"+ New", newStore:"New store", editStore:"Store",
+    storeName:"Store name", storeUrl:"Website", emptyStores:"No stores yet",
+    confirmDelStore:"Delete store? Orders keep the saved name.",
+    byStore:"By store", byClient:"By client",
+    allStatuses:"All statuses",
+    st:["New","Purchased","In transit","Received","Handed to client"],
+    paid:"Paid", unpaid:"Unpaid", partial:"Partial", clientsWord:"clients",
+    watchNote:"“Update prices” button: when online it tries to fetch the price by link (won't work on every site due to protection). If it fails, you enter it manually. Works offline too.",
+    newOrder:"New order", editOrder:"Edit order",
+    client:"Client", chooseClient:"— choose client —", newClientInline:"+ New", noClient:"No client",
+    store:"Store / site", orderNo:"Order №", purchaseDate:"Purchase date",
+    currency:"Currency", status:"Status", tracking:"Tracking №", clientPaidQ:"Client paid",
+    items:"Items", addItem:"+ Add item",
+    title:"Product title", article:"Article", size:"Size", qty:"Qty",
+    cost:"Cost", priceForClient:"Client price", link:"Link", photo:"Photo",
+    orderTotal:"Order total", orderProfit:"Profit",
+    chartProfit:"Profit by month", totalOwed:"Total owed", fromLabel:"From", toLabel:"To",
+    periodPrev:"Last month", queueAll:"All",
+    save:"Save", cancel:"Cancel", del:"Delete", edit:"Edit",
+    newClient:"New client", editClient:"Client",
+    fullName:"Full name", nick:"Nick / label (optional)", notes:"Notes",
+    phones:"Phones", addPhone:"+ Phone", phone:"Phone number",
+    socials:"Social networks", addSocial:"+ Social", handle:"Handle or link",
+    addresses:"Delivery addresses", addAddress:"+ Address", addressVal:"Address / branch №",
+    ordersOf:"Orders", owes:"Owes", openLink:"Open",
+    fillSomething:"Enter at least a name or a contact",
+    netNames:{instagram:"Instagram",tiktok:"TikTok",threads:"Threads",facebook:"Facebook",telegram:"Telegram",other:"Other"},
+    delivNames:{novaposhta:"Nova Poshta",ukrposhta:"Ukrposhta",meest:"Meest",rozetka:"Rozetka",courier:"Courier",pickup:"Pickup",other:"Other"},
+    newWatch:"Tracked item", editWatch:"Item", currentPrice:"Current price",
+    updatePrice:"Update price", priceHistory:"Price history", enterNewPrice:"Enter new price",
+    noChange:"no change",
+    periodAll:"All time", periodMonth:"This month",
+    totalRevenue:"Total revenue", totalProfit:"Total profit",
+    byCurrency:"By currency", inBase:"Total in base currency",
+    received:"Received (sales)", spent:"Spent (purchases)",
+    byStatus:"By status", unpaidClients:"Unpaid", ordersCount:"Orders",
+    language:"Language", baseCurrency:"Base currency", rates:"Exchange rates",
+    rateHint:"How much base currency per 1 unit:",
+    baseSetOnce:"Choose the base currency once — it locks after the first order.",
+    baseLockedNote:"🔒 Base currency is locked (orders exist) to keep conversions consistent.",
+    monoRates:"Update rates from monobank", monoOk:"Rates updated from monobank",
+    monoErr:"Couldn't fetch rates (no internet or rate limit 1 req/min). Try in a minute.",
+    ratesUpdated:"Updated", monoLoading:"Loading rates…",
+    dataMgmt:"Data", export:"Export to file", import:"Import from file",
+    clearAll:"Clear all data", install:"Install",
+    installHint:"Open this file in your phone browser → menu → “Add to Home Screen”.",
+    confirmDelOrder:"Delete this order?", confirmDelClient:"Delete client? Their orders stay without a client.",
+    confirmDelWatch:"Remove item from tracking?", confirmClear:"Delete ALL data permanently?",
+    needClient:"Add a client first.", emptyOrders:"No orders yet", emptyClients:"No clients yet",
+    emptyWatches:"Tracking list is empty", noName:"No title", unknownClient:"No client",
+    autoTrying:"Trying to fetch prices…", autoFail:"Auto fetch failed — enter manually",
+    profitWord:"profit",
+  }
+};
+function t(k){ return (I18N[db.settings.lang]||I18N.ua)[k]; }
+
+/* ============ state ============ */
+const KEY="buyer_oblik_db";
+const CURRENCIES=["USD","EUR","PLN","UAH"];
+const CUR_SYM={USD:"$",EUR:"€",PLN:"zł",UAH:"₴"};
+const NETWORKS=["instagram","tiktok","threads","facebook","telegram","other"];
+const NET_ICON={instagram:"📷",tiktok:"🎵",threads:"🧵",facebook:"📘",telegram:"✈️",other:"🔗"};
+const DELIV=["novaposhta","ukrposhta","meest","rozetka","courier","pickup","other"];
+const DELIV_ICON={novaposhta:"📦",ukrposhta:"📮",meest:"📦",rozetka:"🛒",courier:"🚚",pickup:"🏬",other:"📍"};
+let db=load();
+let editingOrderItems=[]; // working copy while editing order
+
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){ const d=JSON.parse(raw); return normalize(d); }
+  }catch(e){ console.warn(e); }
+  return normalize({});
+}
+function normalize(d){
+  d.clients=(d.clients||[]).map(c=>{
+    c.fullName = c.fullName || c.name || '';
+    c.nick = c.nick || '';
+    c.phones = c.phones || (c.phone?[c.phone]:[]);
+    c.socials = c.socials || (c.instaUrl?[{net:'instagram',val:c.instaUrl}]:[]);
+    c.addresses = c.addresses || [];
+    c.notes = c.notes || '';
+    delete c.name; delete c.instaUrl; delete c.phone;
+    return c;
+  });
+  d.orders=(d.orders||[]).map(o=>{
+    o.items=(o.items||[]).map(it=>{
+      if(!it.costCur)  it.costCur  = o.currency || 'USD';
+      if(!it.priceCur) it.priceCur = o.currency || 'USD';
+      if(it.clientId===undefined) it.clientId = o.clientId || null; // client moved to item level
+      if(it.paid===undefined)     it.paid     = !!o.clientPaid;     // payment is now per item
+      return it;
+    });
+    return o;
+  });
+  // stores as first-class entities; migrate old free-text order.store into a store record
+  d.stores=d.stores||[];
+  d.orders.forEach(o=>{
+    if(o.storeId) return;
+    const name=(o.store||'').trim();
+    if(!name) return;
+    let st=d.stores.find(s=>s.name.toLowerCase()===name.toLowerCase());
+    if(!st){ st={id:uid(),name,url:'',notes:''}; d.stores.push(st); }
+    o.storeId=st.id;
+  });
+  d.watches=d.watches||[];
+  d.settings=Object.assign({lang:"ua", base:"USD", rates:{USD:1, EUR:1.08, PLN:0.25, UAH:0.024}}, d.settings||{});
+  d.settings.rates=Object.assign({USD:1,EUR:1.08,PLN:0.25,UAH:0.024}, d.settings.rates||{});
+  return d;
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+let _uidCounter=0;
+function uid(){ return Date.now().toString(36)+'-'+(_uidCounter++).toString(36)+Math.floor(performance.now()*1000%100000).toString(36); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(n){ n=Number(n)||0; return n.toLocaleString(db.settings.lang==='ua'?'uk-UA':'en-US',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function money(n,cur){ return fmt(n)+" "+(CUR_SYM[cur]||cur); }
+
+/* ============ calc ============ */
+// All money math is normalised to the base currency. Cost and sale price can each
+// have their own currency (it.costCur / it.priceCur); fall back to base if absent.
+function toBase(amount,cur){ const r=db.settings.rates[cur]; return amount*(r==null?1:r); }
+function itemQty(it){ return Number(it.qty)||1; }
+function itemTotal(it){ return toBase(Number(it.priceForClient)||0, it.priceCur||db.settings.base)*itemQty(it); } // base
+function itemCost(it){ return toBase(Number(it.cost)||0, it.costCur||db.settings.base)*itemQty(it); }            // base
+function orderTotal(o){ return (o.items||[]).reduce((s,i)=>s+itemTotal(i),0); }   // revenue in base
+function orderCost(o){ return (o.items||[]).reduce((s,i)=>s+itemCost(i),0); }     // cost in base
+function orderProfit(o){ return orderTotal(o)-orderCost(o); }                     // profit in base
+function clientById(id){ return db.clients.find(c=>c.id===id); }
+function storeById(id){ return db.stores.find(s=>s.id===id); }
+function storeName(o){ const s=o.storeId&&storeById(o.storeId); return (s&&s.name)||o.store||t('noName'); }
+// An order can hold items for several clients; client is per item.
+function orderClientIds(o){ return [...new Set((o.items||[]).map(i=>i.clientId).filter(Boolean))]; }
+function orderClientsLabel(o){
+  const names=orderClientIds(o).map(id=>clientLabel(clientById(id)));
+  if(!names.length) return t('unknownClient');
+  return names.length<=2 ? names.join(', ') : names.slice(0,2).join(', ')+' +'+(names.length-2);
+}
+function orderPaidState(o){ const its=o.items||[]; if(!its.length)return 'none';
+  const p=its.filter(i=>i.paid).length; return p===0?'none':p===its.length?'all':'partial'; }
+function clientItems(o,cid){ return (o.items||[]).filter(i=>i.clientId===cid); }
+function clientSubtotalBase(o,cid){ return clientItems(o,cid).reduce((s,i)=>s+itemTotal(i),0); }
+function clientUnpaidBase(cid){ let s=0; db.orders.forEach(o=>clientItems(o,cid).forEach(i=>{ if(!i.paid)s+=itemTotal(i); })); return s; }
+function clientLabel(c){ if(!c)return t('unknownClient'); return c.fullName||c.nick||((c.socials||[])[0]&&c.socials[0].val)||((c.phones||[])[0])||t('noName'); }
+function socialUrl(net,val){
+  val=(val||'').trim(); if(!val)return '';
+  if(/^https?:\/\//i.test(val)) return val;
+  const h=val.replace(/^@/,'');
+  switch(net){
+    case 'instagram': return 'https://instagram.com/'+h;
+    case 'tiktok':    return 'https://tiktok.com/@'+h;
+    case 'threads':   return 'https://threads.net/@'+h;
+    case 'facebook':  return 'https://facebook.com/'+h;
+    case 'telegram':  return 'https://t.me/'+h;
+    default:          return '';
+  }
+}
+
+/* ============ navigation ============ */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-'+name).classList.add('active');
+  if(name==='orders')renderOrders();
+  if(name==='clients')renderClients();
+  if(name==='stores')renderStores();
+  if(name==='watches')renderWatches();
+  if(name==='income')renderIncome();
+  if(name==='settings')renderSettings();
+  window.scrollTo(0,0);
+}
+
+/* ============ language ============ */
+function setLang(l){
+  db.settings.lang=l; save(); applyStaticTexts(); renderAll();
+}
+function applyStaticTexts(){
+  document.documentElement.lang = db.settings.lang==='ua'?'uk':'en';
+  document.getElementById('langUa').classList.toggle('active', db.settings.lang==='ua');
+  document.getElementById('langEn').classList.toggle('active', db.settings.lang==='en');
+  document.getElementById('appTitle').textContent=t('appTitle');
+  document.querySelectorAll('[data-t]').forEach(el=>{ el.textContent=t(el.getAttribute('data-t')); });
+  document.getElementById('orderSearch').placeholder=t('searchOrders');
+  document.getElementById('clientSearch').placeholder=t('searchClients');
+  document.getElementById('storeSearch').placeholder=t('searchStores');
+}
+function renderAll(){
+  renderOrders(); renderClients(); renderStores(); renderWatches(); renderIncome(); renderSettings();
+}
+
+/* ============ ORDERS ============ */
+let orderFilter='all'; // 'all' | '0'..'4' (status) | 'unpaid'
+function orderMatchesFilter(o){
+  if(orderFilter==='all') return true;
+  if(orderFilter==='unpaid') return orderPaidState(o)!=='all';
+  return o.status===parseInt(orderFilter);
+}
+function renderOrderChips(){
+  const wrap=document.getElementById('orderChips');
+  const cnt=v=>db.orders.filter(o=>{ if(v==='all')return true; if(v==='unpaid')return orderPaidState(o)!=='all'; return o.status===parseInt(v); }).length;
+  const chip=(v,label,warn)=>`<button class="chip${warn?' warn':''}${orderFilter===v?' active':''}" onclick="orderFilter='${v}';renderOrders()">${esc(label)} <b>${cnt(v)}</b></button>`;
+  wrap.innerHTML = chip('all',t('queueAll'))
+    + t('st').map((s,i)=>chip(String(i),s)).join('')
+    + chip('unpaid',t('unpaid'),true);
+}
+function renderOrders(){
+  renderOrderChips();
+  const q=(document.getElementById('orderSearch').value||'').toLowerCase().trim();
+  const wrap=document.getElementById('ordersList');
+  let list=db.orders.slice().sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+  list=list.filter(orderMatchesFilter);
+  if(q){
+    list=list.filter(o=>{
+      const cls=orderClientIds(o).map(id=>clientById(id)).filter(Boolean);
+      const hay=[storeName(o),o.orderNumber,o.trackingNumber,
+        ...cls.map(clientLabel), ...cls.flatMap(c=>c.phones||[]),
+        ...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if(!list.length){ wrap.innerHTML=emptyBox('📦',t('emptyOrders')); return; }
+  const base=db.settings.base;
+  wrap.innerHTML=list.map(o=>{
+    const prof=orderProfit(o);
+    const ps=orderPaidState(o);
+    const pillCls=ps==='all'?'paid':ps==='partial'?'st0':'unpaid';
+    const pillTxt=ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid');
+    const thumbs=(o.items||[]).filter(i=>i.photo).slice(0,5).map(i=>`<img class="thumb" src="${esc(i.photo)}" alt="">`).join('');
+    return `<div class="card" onclick="openOrder('${o.id}')">
+      <div class="row">
+        <div>
+          <div class="big">${esc(storeName(o))} ${o.orderNumber?'<span class="muted">#'+esc(o.orderNumber)+'</span>':''}</div>
+          <div class="sub">📅 ${esc(o.purchaseDate||'')} · 👤 ${esc(orderClientsLabel(o))}</div>
+        </div>
+        <span class="pill tap st${o.status||0}" onclick="event.stopPropagation();cycleStatus('${o.id}')" title="${esc(t('status'))}">${esc(t('st')[o.status||0])}</span>
+      </div>
+      <div class="row" style="margin-top:8px; align-items:center">
+        <div><span class="big">${money(orderTotal(o),base)}</span>
+          <span class="${prof>=0?'profit':'loss'}" style="font-size:13px">(${prof>=0?'+':''}${money(prof,base)} ${t('profitWord')})</span></div>
+        <span class="pill ${pillCls}">${pillTxt}</span>
+      </div>
+      ${thumbs?`<div class="thumbs">${thumbs}</div>`:''}
+      <div class="sub" style="margin-top:6px">${(o.items||[]).map(i=>esc(i.title||t('noName'))+(i.size?' ('+esc(i.size)+')':'')).join(' · ')}</div>
+    </div>`;
+  }).join('');
+}
+function cycleStatus(id){
+  const o=db.orders.find(x=>x.id===id); if(!o)return;
+  o.status=((o.status||0)+1)%t('st').length;  // tap to advance, wraps back to Нове
+  save(); renderOrders();
+}
+
+function openOrder(id){
+  const o = id ? db.orders.find(x=>x.id===id) : null;
+  const base = db.settings.base;
+  editingOrderItems = o ? JSON.parse(JSON.stringify(o.items||[])) : [{title:'',article:'',size:'',qty:1,cost:'',costCur:'USD',priceForClient:'',priceCur:base,clientId:'',paid:false,link:'',photo:''}];
+  const storeOpts = db.stores.map(s=>`<option value="${s.id}" ${o&&o.storeId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+  const sheet=document.getElementById('sheet');
+  sheet.innerHTML=`
+    <h2>${id?t('editOrder'):t('newOrder')}</h2>
+    <div class="field"><label>${t('store')}</label>
+      <div class="linkrow">
+        <select id="f_store" style="flex:1">
+          <option value="">${t('chooseStore')}</option>${storeOpts}
+        </select>
+        <button class="btn sm sec" onclick="quickAddStore()">${t('newStoreInline')}</button>
+      </div>
+    </div>
+    <div class="field"><label>${t('orderNo')}</label><input id="f_orderNo" value="${esc(o?o.orderNumber:'')}"></div>
+    <div class="grid2">
+      <div class="field"><label>${t('purchaseDate')}</label><input id="f_date" type="date" value="${esc(o?o.purchaseDate:todayISO())}"></div>
+      <div class="field"><label>${t('status')}</label><select id="f_status">${t('st').map((s,i)=>`<option value="${i}" ${o&&o.status===i?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>${t('tracking')}</label><input id="f_track" value="${esc(o?o.trackingNumber:'')}"></div>
+
+    <h2 style="font-size:15px; margin:14px 0 8px">${t('items')}</h2>
+    <div id="itemsWrap"></div>
+    <button class="btn sm sec" style="width:100%" onclick="addItemRow()">${t('addItem')}</button>
+
+    <div class="totbar" id="orderTotBar"></div>
+
+    <div class="sheet-actions">
+      ${id?`<button class="btn danger" onclick="deleteOrder('${id}')">${t('del')}</button>`:''}
+      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn" onclick="saveOrder('${id||''}')">${t('save')}</button>
+    </div>`;
+  renderItemEditors();
+  openSheet();
+}
+function curSelect(idx,key,sel){
+  return `<select onchange="updItem(${idx},'${key}',this.value)" style="flex:0 0 84px; width:84px; background:var(--card); border:1px solid var(--border); color:var(--text); padding:11px 6px; border-radius:12px">${CURRENCIES.map(c=>`<option ${sel===c?'selected':''}>${c}</option>`).join('')}</select>`;
+}
+function renderItemEditors(){
+  const base=db.settings.base;
+  const wrap=document.getElementById('itemsWrap');
+  wrap.innerHTML=editingOrderItems.map((it,idx)=>{
+    const profB=itemTotal(it)-itemCost(it); // per-item profit in base
+    const has=(it.cost||it.priceForClient);
+    return `
+    <div class="itemcard">
+      <button class="btn sm danger del" onclick="removeItemRow(${idx})">✕</button>
+      <div class="field"><label>${t('title')}</label><input value="${esc(it.title)}" oninput="updItem(${idx},'title',this.value)"></div>
+      <div class="field"><label>${t('client')}</label>
+        <div class="linkrow">
+          <select onchange="updItem(${idx},'clientId',this.value)" style="flex:1; min-width:0; background:var(--card); border:1px solid var(--border); color:var(--text); padding:11px 10px; border-radius:12px">
+            <option value="">${t('chooseClient')}</option>
+            ${db.clients.map(c=>`<option value="${c.id}" ${it.clientId===c.id?'selected':''}>${esc(clientLabel(c))}</option>`).join('')}
+          </select>
+          <button class="btn sm sec" onclick="quickAddItemClient(${idx})">${t('newClientInline')}</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>${t('article')}</label><input value="${esc(it.article)}" oninput="updItem(${idx},'article',this.value)"></div>
+        <div class="field"><label>${t('size')}</label><input value="${esc(it.size)}" oninput="updItem(${idx},'size',this.value)"></div>
+        <div class="field"><label>${t('qty')}</label><input type="number" min="1" value="${esc(it.qty||1)}" oninput="updItem(${idx},'qty',this.value)"></div>
+      </div>
+      <div class="field"><label>${t('cost')}</label>
+        <div class="linkrow"><input type="number" step="0.01" value="${esc(it.cost)}" oninput="updItem(${idx},'cost',this.value)" style="flex:1; min-width:0">${curSelect(idx,'costCur',it.costCur||base)}</div></div>
+      <div class="field"><label>${t('priceForClient')}</label>
+        <div class="linkrow"><input type="number" step="0.01" value="${esc(it.priceForClient)}" oninput="updItem(${idx},'priceForClient',this.value)" style="flex:1; min-width:0">${curSelect(idx,'priceCur',it.priceCur||base)}</div></div>
+      <div class="sub" id="itemprof_${idx}" style="text-align:right; margin-top:2px">${has?`${t('orderProfit')}: <b class="${profB>=0?'profit':'loss'}">${money(profB,base)}</b>`:''}</div>
+      <div class="check" style="margin:6px 0"><input type="checkbox" id="paid_${idx}" ${it.paid?'checked':''} onchange="updItem(${idx},'paid',this.checked)"><label style="margin:0">${t('clientPaidQ')}</label></div>
+      <div class="field"><label>${t('link')}</label><input value="${esc(it.link)}" oninput="updItem(${idx},'link',this.value)"></div>
+      <div class="field"><label>${t('photo')}</label>
+        <div class="linkrow">
+          <input value="${esc(it.photo||'')}" oninput="updItem(${idx},'photo',this.value)" placeholder="https://… / 📎" style="flex:1; min-width:0">
+          <button class="btn sm sec" onclick="document.getElementById('photofile_${idx}').click()">📎</button>
+          ${it.photo?`<button class="btn sm danger" onclick="updItem(${idx},'photo','')">✕</button>`:''}
+        </div>
+        <input type="file" accept="image/*" id="photofile_${idx}" style="display:none" onchange="attachPhoto(${idx},this)">
+        ${it.photo?`<img class="photo-edit" src="${esc(it.photo)}" alt="" style="margin-top:8px">`:''}
+      </div>
+    </div>`;
+  }).join('');
+  updOrderTotBar();
+}
+function updItem(idx,key,val){
+  editingOrderItems[idx][key]=val;
+  if(key==='costCur'||key==='priceCur'){ renderItemEditors(); return; }  // discrete change → full re-render
+  if(key==='photo' && val===''){ renderItemEditors(); return; }          // cleared photo → refresh thumbnail
+  if(['cost','priceForClient','qty'].includes(key)){ updOrderTotBar(); updItemProfit(idx); } // live, keep focus
+}
+function attachPhoto(idx,input){
+  const file=input.files&&input.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=600, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas');
+      cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      editingOrderItems[idx].photo=cv.toDataURL('image/jpeg',0.7); // downscaled to keep localStorage small
+      renderItemEditors();
+    };
+    img.src=e.target.result;
+  };
+  r.readAsDataURL(file);
+}
+function updItemProfit(idx){
+  const el=document.getElementById('itemprof_'+idx); if(!el) return;
+  const it=editingOrderItems[idx], base=db.settings.base, p=itemTotal(it)-itemCost(it);
+  el.innerHTML=(it.cost||it.priceForClient)?`${t('orderProfit')}: <b class="${p>=0?'profit':'loss'}">${money(p,base)}</b>`:'';
+}
+function addItemRow(){
+  const last=editingOrderItems[editingOrderItems.length-1];
+  const cur=(last&&last.costCur)||'USD'; // reuse previous item's purchase currency as a convenience
+  editingOrderItems.push({title:'',article:'',size:'',qty:1,cost:'',costCur:cur,priceForClient:'',priceCur:db.settings.base,clientId:'',paid:false,link:'',photo:''});
+  renderItemEditors();
+}
+function quickAddItemClient(idx){
+  const name=prompt(t('fullName'));
+  if(name&&name.trim()){
+    const c={id:uid(),fullName:name.trim(),nick:'',phones:[],socials:[],addresses:[],notes:''};
+    db.clients.push(c); save();
+    editingOrderItems[idx].clientId=c.id;
+    renderItemEditors();
+  }
+}
+function removeItemRow(i){ editingOrderItems.splice(i,1); if(!editingOrderItems.length)addItemRow(); else renderItemEditors(); }
+function updOrderTotBar(){
+  const base=db.settings.base;
+  const tot=editingOrderItems.reduce((s,i)=>s+itemTotal(i),0);
+  const prof=tot-editingOrderItems.reduce((s,i)=>s+itemCost(i),0);
+  document.getElementById('orderTotBar').innerHTML=
+    `<span>${t('orderTotal')}: <b>${money(tot,base)}</b></span><span>${t('orderProfit')}: <b class="${prof>=0?'profit':'loss'}">${money(prof,base)}</b></span>`;
+}
+function saveOrder(id){
+  const storeId=document.getElementById('f_store').value||null;
+  const st=storeId&&storeById(storeId);
+  const o={
+    id: id||uid(),
+    storeId: storeId,
+    store: st?st.name:'',  // name snapshot kept as fallback for display/search
+    orderNumber: document.getElementById('f_orderNo').value.trim(),
+    purchaseDate: document.getElementById('f_date').value,
+    status: parseInt(document.getElementById('f_status').value)||0,
+    trackingNumber: document.getElementById('f_track').value.trim(),
+    items: editingOrderItems.filter(i=>i.title||i.priceForClient||i.cost).map(i=>({
+      title:i.title.trim?i.title.trim():i.title, article:i.article, size:i.size,
+      qty:Number(i.qty)||1,
+      cost:Number(i.cost)||0, costCur:i.costCur||'USD',
+      priceForClient:Number(i.priceForClient)||0, priceCur:i.priceCur||db.settings.base,
+      clientId:i.clientId||null, paid:!!i.paid,
+      link:i.link, photo:i.photo||''
+    }))
+  };
+  if(id){ const idx=db.orders.findIndex(x=>x.id===id); db.orders[idx]=o; }
+  else db.orders.push(o);
+  save(); closeSheet(); renderOrders();
+}
+function deleteOrder(id){
+  if(!confirm(t('confirmDelOrder')))return;
+  db.orders=db.orders.filter(o=>o.id!==id); save(); closeSheet(); renderOrders();
+}
+
+/* ============ CLIENTS ============ */
+function renderClients(){
+  const q=(document.getElementById('clientSearch').value||'').toLowerCase().trim();
+  const wrap=document.getElementById('clientsList');
+  let list=db.clients.slice().sort((a,b)=>clientLabel(a).localeCompare(clientLabel(b)));
+  if(q) list=list.filter(c=>[clientLabel(c),c.nick,c.notes,
+      (c.phones||[]).join(' '),(c.socials||[]).map(s=>s.val).join(' '),
+      (c.addresses||[]).map(a=>a.val).join(' ')].join(' ').toLowerCase().includes(q));
+  if(!list.length){ wrap.innerHTML=emptyBox('👥',t('emptyClients')); return; }
+  const base=db.settings.base;
+  // debtors first, then the rest — so who owes is on top
+  list.sort((a,b)=>clientUnpaidBase(b.id)-clientUnpaidBase(a.id) || clientLabel(a).localeCompare(clientLabel(b)));
+  let totalOwed=0, debtorN=0;
+  db.clients.forEach(c=>{ const d=clientUnpaidBase(c.id); if(d>0){ totalOwed+=d; debtorN++; } });
+  const banner = (!q && totalOwed>0)
+    ? `<div class="owe-banner"><span>💸 ${t('totalOwed')}: ${debtorN}</span><span>${money(totalOwed,base)}</span></div>` : '';
+  wrap.innerHTML = banner + list.map(c=>{
+    const ords=db.orders.filter(o=>orderClientIds(o).includes(c.id));
+    const oweBase=clientUnpaidBase(c.id);
+    const oweStr=oweBase?money(oweBase,base):'—';
+    const label=clientLabel(c);
+    const phone=(c.phones||[])[0];
+    const socialsHtml=(c.socials||[]).map(s=>{
+      const u=socialUrl(s.net,s.val), ic=NET_ICON[s.net]||'🔗';
+      return u?`<a href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="text-decoration:none">${ic}</a>`:`<span title="${esc(s.val)}">${ic}</span>`;
+    }).join(' ');
+    const addr=(c.addresses||[])[0];
+    return `<div class="card${oweBase>0?' debt':''}" onclick="openClient('${c.id}')">
+      <div class="row">
+        <div style="min-width:0">
+          <div class="big">${esc(label)}</div>
+          ${c.nick&&c.nick!==label?`<div class="sub">${esc(c.nick)}</div>`:''}
+          ${phone?`<div class="sub">📞 ${esc(phone)}${c.phones.length>1?' +'+(c.phones.length-1):''}</div>`:''}
+          ${socialsHtml?`<div class="sub" style="font-size:17px; letter-spacing:2px">${socialsHtml}</div>`:''}
+          ${addr?`<div class="sub">${DELIV_ICON[addr.method]||'📍'} ${esc(t('delivNames')[addr.method]||'')}: ${esc(addr.val)}</div>`:''}
+        </div>
+        <div style="text-align:right; flex:0 0 auto">
+          <div class="muted">${t('ordersOf')}: <b>${ords.length}</b></div>
+          <div class="muted">${t('owes')}: <b class="${oweStr==='—'?'':'loss'}">${oweStr}</b></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* working copies while editing a client */
+let editPhones=[], editSocials=[], editAddrs=[];
+function openClient(id){
+  const c = id ? db.clients.find(x=>x.id===id) : null;
+  editPhones = c ? (c.phones||[]).slice() : [];
+  editSocials = c ? (c.socials||[]).map(s=>Object.assign({},s)) : [];
+  editAddrs = c ? (c.addresses||[]).map(a=>Object.assign({},a)) : [];
+  const sheet=document.getElementById('sheet');
+  let ordersHtml='';
+  if(c){
+    const ords=db.orders.filter(o=>orderClientIds(o).includes(c.id)).sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+    if(ords.length){
+      ordersHtml=`<h2 style="font-size:15px;margin:16px 0 8px">${t('navOrders')} (${ords.length})</h2>`+
+        ords.map(o=>{ const its=clientItems(o,c.id); const allPaid=its.every(i=>i.paid);
+          return `<div class="itemcard" onclick="closeSheet();openOrder('${o.id}')">
+          <div class="row"><b>${esc(storeName(o))} ${o.orderNumber?'#'+esc(o.orderNumber):''}</b>
+          <span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span></div>
+          <div class="sub">${esc(o.purchaseDate||'')} · ${money(clientSubtotalBase(o,c.id),db.settings.base)} · ${allPaid?t('paid'):t('unpaid')}</div>
+        </div>`; }).join('');
+    }
+  }
+  sheet.innerHTML=`
+    <h2>${id?t('editClient'):t('newClient')}</h2>
+    <div class="field"><label>${t('fullName')}</label><input id="c_fullName" value="${esc(c?c.fullName:'')}" placeholder="Прізвище Ім'я По батькові"></div>
+    <div class="field"><label>${t('nick')}</label><input id="c_nick" value="${esc(c?c.nick:'')}"></div>
+
+    <div class="row" style="align-items:center; margin:10px 0 6px">
+      <b style="font-size:14px">${t('phones')}</b><button class="btn sm sec" onclick="addPhone()">${t('addPhone')}</button>
+    </div>
+    <div id="phonesWrap"></div>
+
+    <div class="row" style="align-items:center; margin:10px 0 6px">
+      <b style="font-size:14px">${t('socials')}</b><button class="btn sm sec" onclick="addSocial()">${t('addSocial')}</button>
+    </div>
+    <div id="socialsWrap"></div>
+
+    <div class="row" style="align-items:center; margin:10px 0 6px">
+      <b style="font-size:14px">${t('addresses')}</b><button class="btn sm sec" onclick="addAddr()">${t('addAddress')}</button>
+    </div>
+    <div id="addrWrap"></div>
+
+    <div class="field" style="margin-top:10px"><label>${t('notes')}</label><textarea id="c_notes">${esc(c?c.notes:'')}</textarea></div>
+    <div class="sheet-actions">
+      ${id?`<button class="btn danger" onclick="deleteClient('${id}')">${t('del')}</button>`:''}
+      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn" onclick="saveClient('${id||''}')">${t('save')}</button>
+    </div>
+    ${ordersHtml}`;
+  renderClientSub();
+  openSheet();
+}
+function renderClientSub(){
+  document.getElementById('phonesWrap').innerHTML = editPhones.map((p,i)=>`
+    <div class="linkrow" style="margin-bottom:8px">
+      <input type="tel" value="${esc(p)}" oninput="editPhones[${i}]=this.value" placeholder="+380…" style="flex:1; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px">
+      <button class="btn sm danger" onclick="rmPhone(${i})">✕</button>
+    </div>`).join('') || `<div class="muted" style="margin-bottom:6px">—</div>`;
+  document.getElementById('socialsWrap').innerHTML = editSocials.map((s,i)=>`
+    <div class="linkrow" style="margin-bottom:8px">
+      <select onchange="editSocials[${i}].net=this.value" style="flex:0 0 auto; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 8px; border-radius:12px">
+        ${NETWORKS.map(n=>`<option value="${n}" ${s.net===n?'selected':''}>${NET_ICON[n]} ${esc(t('netNames')[n])}</option>`).join('')}
+      </select>
+      <input value="${esc(s.val)}" oninput="editSocials[${i}].val=this.value" placeholder="${t('handle')}" style="flex:1; min-width:0; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px">
+      <button class="btn sm danger" onclick="rmSocial(${i})">✕</button>
+    </div>`).join('') || `<div class="muted" style="margin-bottom:6px">—</div>`;
+  document.getElementById('addrWrap').innerHTML = editAddrs.map((a,i)=>`
+    <div class="itemcard" style="margin-bottom:8px">
+      <div class="linkrow">
+        <select onchange="editAddrs[${i}].method=this.value" style="flex:1; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 8px; border-radius:12px">
+          ${DELIV.map(m=>`<option value="${m}" ${a.method===m?'selected':''}>${DELIV_ICON[m]} ${esc(t('delivNames')[m])}</option>`).join('')}
+        </select>
+        <button class="btn sm danger" onclick="rmAddr(${i})">✕</button>
+      </div>
+      <input value="${esc(a.val)}" oninput="editAddrs[${i}].val=this.value" placeholder="${t('addressVal')}" style="width:100%; margin-top:8px; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px">
+    </div>`).join('') || `<div class="muted" style="margin-bottom:6px">—</div>`;
+}
+function addPhone(){ editPhones.push(''); renderClientSub(); }
+function rmPhone(i){ editPhones.splice(i,1); renderClientSub(); }
+function addSocial(){ editSocials.push({net:'instagram',val:''}); renderClientSub(); }
+function rmSocial(i){ editSocials.splice(i,1); renderClientSub(); }
+function addAddr(){ editAddrs.push({method:'novaposhta',val:''}); renderClientSub(); }
+function rmAddr(i){ editAddrs.splice(i,1); renderClientSub(); }
+function saveClient(id){
+  const fullName=document.getElementById('c_fullName').value.trim();
+  const nick=document.getElementById('c_nick').value.trim();
+  const notes=document.getElementById('c_notes').value.trim();
+  const phones=editPhones.map(p=>(p||'').trim()).filter(Boolean);
+  const socials=editSocials.filter(s=>(s.val||'').trim()).map(s=>({net:s.net,val:s.val.trim()}));
+  const addresses=editAddrs.filter(a=>(a.val||'').trim()).map(a=>({method:a.method,val:a.val.trim()}));
+  if(!fullName&&!nick&&!phones.length&&!socials.length){ alert(t('fillSomething')); return; }
+  const c={ id:id||uid(), fullName, nick, phones, socials, addresses, notes };
+  if(id){ const i=db.clients.findIndex(x=>x.id===id); db.clients[i]=c; }
+  else db.clients.push(c);
+  save(); closeSheet(); renderClients();
+}
+function deleteClient(id){
+  if(!confirm(t('confirmDelClient')))return;
+  db.clients=db.clients.filter(c=>c.id!==id);
+  db.orders.forEach(o=>(o.items||[]).forEach(i=>{ if(i.clientId===id)i.clientId=null; }));
+  save(); closeSheet(); renderClients();
+}
+function quickAddClient(){
+  const name=prompt(t('fullName'));
+  if(name&&name.trim()){
+    const c={id:uid(),fullName:name.trim(),nick:'',phones:[],socials:[],addresses:[],notes:''};
+    db.clients.push(c); save();
+    const sel=document.getElementById('f_client');
+    sel.innerHTML=`<option value="">${t('chooseClient')}</option>`+db.clients.map(x=>`<option value="${x.id}" ${x.id===c.id?'selected':''}>${esc(clientLabel(x))}</option>`).join('');
+  }
+}
+
+/* ============ STORES ============ */
+function renderStores(){
+  const q=(document.getElementById('storeSearch').value||'').toLowerCase().trim();
+  const wrap=document.getElementById('storesList');
+  let list=db.stores.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(q) list=list.filter(s=>[s.name,s.url,s.notes].join(' ').toLowerCase().includes(q));
+  if(!list.length){ wrap.innerHTML=emptyBox('🏬',t('emptyStores')); return; }
+  wrap.innerHTML=list.map(s=>{
+    const n=db.orders.filter(o=>o.storeId===s.id).length;
+    return `<div class="card" onclick="openStore('${s.id}')">
+      <div class="row">
+        <div style="min-width:0">
+          <div class="big">${esc(s.name)}</div>
+          ${s.url?`<div class="sub linkrow">🔗 <a href="${esc(/^https?:\/\//i.test(s.url)?s.url:'https://'+s.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(s.url)}</a></div>`:''}
+        </div>
+        <div style="text-align:right; flex:0 0 auto"><div class="muted">${t('ordersOf')}: <b>${n}</b></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openStore(id){
+  const s = id ? storeById(id) : null;
+  const sheet=document.getElementById('sheet');
+  let ordersHtml='';
+  if(s){
+    const ords=db.orders.filter(o=>o.storeId===s.id).sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+    if(ords.length){
+      ordersHtml=`<h2 style="font-size:15px;margin:16px 0 8px">${t('navOrders')} (${ords.length})</h2>`+
+        ords.map(o=>{ const ps=orderPaidState(o);
+          return `<div class="itemcard" onclick="closeSheet();openOrder('${o.id}')">
+          <div class="row"><b>${esc(o.orderNumber?'#'+o.orderNumber:t('noName'))}</b><span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span></div>
+          <div class="sub">${esc(o.purchaseDate||'')} · ${money(orderTotal(o),db.settings.base)} · ${ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid')}</div>
+        </div>`; }).join('');
+    }
+  }
+  sheet.innerHTML=`
+    <h2>${id?t('editStore'):t('newStore')}</h2>
+    <div class="field"><label>${t('storeName')}</label><input id="s_name" value="${esc(s?s.name:'')}" placeholder="Asos.com"></div>
+    <div class="field"><label>${t('storeUrl')}</label><input id="s_url" value="${esc(s?s.url:'')}" placeholder="https://…"></div>
+    <div class="field"><label>${t('notes')}</label><textarea id="s_notes">${esc(s?s.notes:'')}</textarea></div>
+    <div class="sheet-actions">
+      ${id?`<button class="btn danger" onclick="deleteStore('${id}')">${t('del')}</button>`:''}
+      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn" onclick="saveStore('${id||''}')">${t('save')}</button>
+    </div>
+    ${ordersHtml}`;
+  openSheet();
+}
+function saveStore(id){
+  const name=document.getElementById('s_name').value.trim();
+  if(!name){ alert(t('storeName')); return; }
+  const url=document.getElementById('s_url').value.trim();
+  const notes=document.getElementById('s_notes').value.trim();
+  if(id){ const st=storeById(id); st.name=name; st.url=url; st.notes=notes;
+    db.orders.forEach(o=>{ if(o.storeId===id)o.store=name; }); }       // keep name snapshot in sync
+  else db.stores.push({id:uid(),name,url,notes});
+  save(); closeSheet(); renderStores();
+}
+function deleteStore(id){
+  if(!confirm(t('confirmDelStore')))return;
+  db.stores=db.stores.filter(s=>s.id!==id);
+  db.orders.forEach(o=>{ if(o.storeId===id)o.storeId=null; });          // o.store name kept as fallback
+  save(); closeSheet(); renderStores();
+}
+function quickAddStore(){
+  const name=prompt(t('storeName'));
+  if(name&&name.trim()){
+    const st={id:uid(),name:name.trim(),url:'',notes:''};
+    db.stores.push(st); save();
+    const sel=document.getElementById('f_store');
+    sel.innerHTML=`<option value="">${t('chooseStore')}</option>`+db.stores.map(x=>`<option value="${x.id}" ${x.id===st.id?'selected':''}>${esc(x.name)}</option>`).join('');
+  }
+}
+
+/* ============ WATCHES (price tracking) ============ */
+function watchCurrent(w){ const h=w.priceHistory||[]; return h.length?h[h.length-1].price:null; }
+function watchPrev(w){ const h=w.priceHistory||[]; return h.length>1?h[h.length-2].price:null; }
+function watchDelta(w){ const c=watchCurrent(w),p=watchPrev(w); if(c==null||p==null)return null; return c-p; }
+function renderWatches(){
+  const wrap=document.getElementById('watchesList');
+  let list=db.watches.slice();
+  // sort: biggest drop first (most negative delta), then no-change, then rises
+  list.sort((a,b)=>{
+    const da=watchDelta(a), dbb=watchDelta(b);
+    const va=(da==null?0:da), vb=(dbb==null?0:dbb);
+    return va-vb;
+  });
+  if(!list.length){ wrap.innerHTML=emptyBox('📉',t('emptyWatches')); return; }
+  wrap.innerHTML=list.map(w=>{
+    const cur=watchCurrent(w), prev=watchPrev(w), d=watchDelta(w);
+    let badge='<span class="delta-none">'+t('noChange')+'</span>';
+    if(d!=null && d<0){ const pct=prev?(d/prev*100):0; badge=`<span class="delta-down">↓ ${fmt(Math.abs(d))} ${CUR_SYM[w.currency]} (${pct.toFixed(1)}%)</span>`; }
+    else if(d!=null && d>0){ const pct=prev?(d/prev*100):0; badge=`<span class="delta-up">↑ ${fmt(d)} ${CUR_SYM[w.currency]} (+${pct.toFixed(1)}%)</span>`; }
+    const last=(w.priceHistory||[]).slice(-1)[0];
+    return `<div class="card">
+      <div class="row">
+        <div onclick="openWatch('${w.id}')" style="flex:1">
+          <div class="big">${esc(w.title||t('noName'))}</div>
+          <div class="sub">${cur!=null?money(cur,w.currency):'—'} ${badge}</div>
+          ${last?`<div class="sub">${esc(last.date)}</div>`:''}
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px; gap:6px">
+        ${w.link?`<a class="btn sm ghost" href="${esc(w.link)}" target="_blank" rel="noopener" style="text-decoration:none">🔗</a>`:''}
+        <button class="btn sm sec" onclick="promptUpdatePrice('${w.id}')">${t('updatePrice')}</button>
+        <button class="btn sm ghost" onclick="openWatch('${w.id}')">${t('priceHistory')}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openWatch(id){
+  const w = id ? db.watches.find(x=>x.id===id) : null;
+  const sheet=document.getElementById('sheet');
+  let hist='';
+  if(w&&(w.priceHistory||[]).length){
+    hist='<h2 style="font-size:15px;margin:16px 0 8px">'+t('priceHistory')+'</h2>'+
+      w.priceHistory.slice().reverse().map((h,i,arr)=>{
+        const next=arr[i+1];
+        let d='';
+        if(next){ const diff=h.price-next.price; d=diff<0?`<span class="delta-down">↓${fmt(Math.abs(diff))}</span>`:diff>0?`<span class="delta-up">↑${fmt(diff)}</span>`:'<span class="delta-none">=</span>'; }
+        return `<div class="hist-row"><span>${esc(h.date)}</span><span><b>${money(h.price,w.currency)}</b> ${d}</span></div>`;
+      }).join('');
+  }
+  sheet.innerHTML=`
+    <h2>${id?t('editWatch'):t('newWatch')}</h2>
+    <div class="field"><label>${t('title')}</label><input id="w_title" value="${esc(w?w.title:'')}"></div>
+    <div class="grid2">
+      <div class="field"><label>${t('currency')}</label><select id="w_cur">${CURRENCIES.map(c=>`<option ${w&&w.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>${t('currentPrice')}</label><input id="w_price" type="number" step="0.01" value="${w?(watchCurrent(w)??''):''}"></div>
+    </div>
+    <div class="field"><label>${t('link')}</label><input id="w_link" value="${esc(w?w.link:'')}"></div>
+    <div class="sheet-actions">
+      ${id?`<button class="btn danger" onclick="deleteWatch('${id}')">${t('del')}</button>`:''}
+      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn" onclick="saveWatch('${id||''}')">${t('save')}</button>
+    </div>
+    ${hist}`;
+  openSheet();
+}
+function saveWatch(id){
+  const title=document.getElementById('w_title').value.trim();
+  const cur=document.getElementById('w_cur').value;
+  const link=document.getElementById('w_link').value.trim();
+  const price=parseFloat(document.getElementById('w_price').value);
+  if(id){
+    const w=db.watches.find(x=>x.id===id);
+    w.title=title; w.currency=cur; w.link=link;
+    if(!isNaN(price)){ const curP=watchCurrent(w); if(curP!==price) w.priceHistory.push({date:todayISO(),price:price}); }
+  } else {
+    const w={id:uid(),title,currency:cur,link,priceHistory:[]};
+    if(!isNaN(price)) w.priceHistory.push({date:todayISO(),price:price});
+    db.watches.push(w);
+  }
+  save(); closeSheet(); renderWatches();
+}
+function deleteWatch(id){
+  if(!confirm(t('confirmDelWatch')))return;
+  db.watches=db.watches.filter(w=>w.id!==id); save(); closeSheet(); renderWatches();
+}
+function promptUpdatePrice(id){
+  const w=db.watches.find(x=>x.id===id);
+  const cur=watchCurrent(w);
+  const v=prompt(t('enterNewPrice')+' ('+w.currency+')', cur!=null?cur:'');
+  if(v===null)return;
+  const p=parseFloat(v);
+  if(isNaN(p))return;
+  w.priceHistory.push({date:todayISO(),price:p});
+  save(); renderWatches();
+}
+async function updatePricesBulk(){
+  if(!db.watches.length){ alert(t('emptyWatches')); return; }
+  // Try online auto-fetch where possible; fallback to manual prompts.
+  for(const w of db.watches){
+    let got=null;
+    if(navigator.onLine && w.link){
+      got=await tryAutoFetch(w.link);
+    }
+    if(got!=null){
+      const cur=watchCurrent(w);
+      if(cur!==got) w.priceHistory.push({date:todayISO(),price:got});
+    } else {
+      const cur=watchCurrent(w);
+      const v=prompt((w.title||t('noName'))+' — '+t('enterNewPrice')+' ('+w.currency+')', cur!=null?cur:'');
+      if(v!==null){ const p=parseFloat(v); if(!isNaN(p)){ if(cur!==p) w.priceHistory.push({date:todayISO(),price:p}); } }
+    }
+  }
+  save(); renderWatches();
+}
+async function tryAutoFetch(url){
+  // Best-effort: most shops block cross-origin reads (CORS) so this usually fails → manual.
+  try{
+    const res=await fetch(url,{mode:'cors'});
+    const html=await res.text();
+    const m=html.match(/[\$€]\s?(\d+[.,]\d{2})/) || html.match(/"price"\s*:\s*"?(\d+[.,]\d{2})/i);
+    if(m) return parseFloat(m[1].replace(',','.'));
+  }catch(e){ /* expected for protected sites */ }
+  return null;
+}
+
+/* ============ INCOME ============ */
+let incFrom='', incTo=''; // date range 'YYYY-MM-DD'; empty = unbounded
+function lastDayISO(y,m){ const d=new Date(y,m+1,0); return d.getFullYear()+'-'+String(m+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function firstDayISO(y,m){ return y+'-'+String(m+1).padStart(2,'0')+'-01'; }
+function setIncPreset(p){
+  const now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  if(p==='all'){ incFrom=''; incTo=''; }
+  else if(p==='this'){ incFrom=firstDayISO(y,m); incTo=lastDayISO(y,m); }
+  else if(p==='prev'){ const py=m===0?y-1:y, pm=m===0?11:m-1; incFrom=firstDayISO(py,pm); incTo=lastDayISO(py,pm); }
+  renderIncome();
+}
+function setIncFrom(v){ incFrom=v; renderIncome(); }
+function setIncTo(v){ incTo=v; renderIncome(); }
+function renderIncome(){
+  const base=db.settings.base;
+  document.getElementById('incomeControls').innerHTML=`
+    <div class="chips">
+      <button class="chip ${(!incFrom&&!incTo)?'active':''}" onclick="setIncPreset('all')">${esc(t('periodAll'))}</button>
+      <button class="chip" onclick="setIncPreset('this')">${esc(t('periodMonth'))}</button>
+      <button class="chip" onclick="setIncPreset('prev')">${esc(t('periodPrev'))}</button>
+    </div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="field" style="margin:0"><label>${t('fromLabel')}</label><input type="date" value="${incFrom}" onchange="setIncFrom(this.value)"></div>
+      <div class="field" style="margin:0"><label>${t('toLabel')}</label><input type="date" value="${incTo}" onchange="setIncTo(this.value)"></div>
+    </div>`;
+  let orders=db.orders.filter(o=>{ const d=o.purchaseDate||'';
+    if(incFrom && d<incFrom) return false;
+    if(incTo && d>incTo) return false; return true; });
+  // monthly profit chart
+  const byMonth={};
+  orders.forEach(o=>{ const ym=(o.purchaseDate||'').slice(0,7); if(ym) byMonth[ym]=(byMonth[ym]||0)+orderProfit(o); });
+  const months=Object.keys(byMonth).sort();
+  const maxAbs=Math.max(1,...months.map(m=>Math.abs(byMonth[m])));
+  const chartHtml = months.length ? `<div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('chartProfit')} (${base})</div>
+      <div class="chart">${months.map(m=>{ const v=byMonth[m]; const h=Math.max(2,Math.round(Math.abs(v)/maxAbs*92));
+        return `<div class="col"><div class="bar ${v<0?'neg':''}" style="height:${h}%"><span class="bval">${(v/1000).toFixed(1)}k</span></div><div class="blab">${m.slice(5)}.${m.slice(2,4)}</div></div>`; }).join('')}</div>
+    </div>` : '';
+  let baseRev=0, baseProf=0;
+  const received={}, spent={}; // original-currency amounts: priceCur -> sum, costCur -> sum
+  orders.forEach(o=>{
+    baseRev+=orderTotal(o); baseProf+=orderProfit(o);
+    (o.items||[]).forEach(it=>{
+      const q=Number(it.qty)||1, pc=it.priceCur||base, cc=it.costCur||base;
+      received[pc]=(received[pc]||0)+(Number(it.priceForClient)||0)*q;
+      spent[cc]=(spent[cc]||0)+(Number(it.cost)||0)*q;
+    });
+  });
+  const stCount=t('st').map((s,i)=>({s,i,n:orders.filter(o=>o.status===i).length}));
+  // distinct clients with at least one unpaid item
+  const unpaidSet=new Set();
+  orders.forEach(o=>(o.items||[]).forEach(i=>{ if(!i.paid && i.clientId) unpaidSet.add(i.clientId); }));
+  const unpaidCount=unpaidSet.size;
+  // revenue/profit by store (per order) and by client (per item, since clients are per item)
+  const byStore={}, byClient={};
+  orders.forEach(o=>{
+    const sn=storeName(o);
+    (byStore[sn]=byStore[sn]||{rev:0,prof:0}); byStore[sn].rev+=orderTotal(o); byStore[sn].prof+=orderProfit(o);
+    (o.items||[]).forEach(it=>{
+      const cn=it.clientId?clientLabel(clientById(it.clientId)):t('noClient');
+      (byClient[cn]=byClient[cn]||{rev:0,prof:0});
+      byClient[cn].rev+=itemTotal(it); byClient[cn].prof+=itemTotal(it)-itemCost(it);
+    });
+  });
+  const curList=obj=>Object.entries(obj).filter(([,v])=>v).map(([c,v])=>
+    `<div class="stat"><span>${c}</span><span class="big">${money(v,c)}</span></div>`).join('')||`<div class="muted" style="padding:8px 0">—</div>`;
+  const grpList=obj=>Object.entries(obj).sort((a,b)=>b[1].rev-a[1].rev).map(([name,v])=>
+    `<div class="stat"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(name)}</span><span style="text-align:right; flex:0 0 auto">${money(v.rev,base)} · <span class="${v.prof>=0?'profit':'loss'}">${money(v.prof,base)}</span></span></div>`
+    ).join('')||`<div class="muted" style="padding:8px 0">—</div>`;
+
+  const owedSum=db.clients.reduce((s,c)=>s+clientUnpaidBase(c.id),0);
+  document.getElementById('incomeView').innerHTML=`
+    <div class="card">
+      <div class="stat"><span>${t('totalRevenue')} (${base})</span><span class="big">${money(baseRev,base)}</span></div>
+      <div class="stat"><span>${t('totalProfit')} (${base})</span><span class="big ${baseProf>=0?'profit':'loss'}">${money(baseProf,base)}</span></div>
+      <div class="stat"><span>${t('ordersCount')}</span><span class="big">${orders.length}</span></div>
+      <div class="stat"><span>${t('unpaidClients')}</span><span class="big ${unpaidCount?'loss':''}">${unpaidCount}</span></div>
+      <div class="stat"><span>${t('totalOwed')} (${base})</span><span class="big ${owedSum?'loss':''}">${money(owedSum,base)}</span></div>
+    </div>
+    ${chartHtml}
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('byStore')}</div>
+      ${grpList(byStore)}
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('byClient')}</div>
+      ${grpList(byClient)}
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('received')}</div>
+      ${curList(received)}
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('spent')}</div>
+      ${curList(spent)}
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('byStatus')}</div>
+      ${stCount.map(x=>`<div class="stat"><span><span class="pill st${x.i}">${esc(x.s)}</span></span><span class="big">${x.n}</span></div>`).join('')}
+    </div>`;
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  const s=db.settings;
+  document.getElementById('settingsView').innerHTML=`
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
+      <select class="search" style="width:100%" id="set_base" onchange="changeBase(this.value)" ${baseLocked()?'disabled':''}>
+        ${CURRENCIES.map(c=>`<option ${s.base===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <div class="sub" style="margin-top:8px">${baseLocked()?t('baseLockedNote'):t('baseSetOnce')}</div>
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:4px">${t('rates')}</div>
+      <div class="sub" style="margin-bottom:8px">${t('rateHint')} (${s.base})</div>
+      ${CURRENCIES.map(c=>`
+        <div class="field" style="margin-bottom:8px">
+          <label>1 ${c} = ? ${s.base}</label>
+          <input type="number" step="0.0001" value="${s.rates[c]}" ${c===s.base?'disabled':''} onchange="setRate('${c}',this.value)">
+        </div>`).join('')}
+      <button class="btn" id="monoBtn" style="width:100%; margin-top:4px" onclick="fetchMonoRates()">🏦 ${t('monoRates')}</button>
+      ${s.ratesUpdated?`<div class="sub" style="text-align:center; margin-top:6px">${t('ratesUpdated')}: ${esc(s.ratesUpdated)}</div>`:''}
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px">${t('dataMgmt')}</div>
+      <button class="btn sec" style="width:100%; margin-bottom:8px" onclick="exportData()">⬇️ ${t('export')}</button>
+      <label class="btn sec" style="width:100%; display:block; text-align:center; margin-bottom:8px">⬆️ ${t('import')}
+        <input type="file" accept="application/json" style="display:none" onchange="importData(this)">
+      </label>
+      <button class="btn danger" style="width:100%" onclick="clearAll()">🗑️ ${t('clearAll')}</button>
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">${t('install')}</div>
+      <div class="sub">${t('installHint')}</div>
+    </div>`;
+}
+function baseLocked(){ return db.orders.length>0; } // fix base once orders exist → stable conversions
+function changeBase(c){ if(baseLocked())return; db.settings.base=c; db.settings.rates[c]=1; save(); renderSettings(); renderIncome(); }
+function setRate(c,v){ const n=parseFloat(v); if(!isNaN(n)){ db.settings.rates[c]=n; save(); renderIncome(); } }
+// Monobank public currency API (rates vs UAH). Cross-converts to current base. Limit: 1 req/min.
+const MONO_CODES={840:'USD',978:'EUR',985:'PLN'};
+async function fetchMonoRates(){
+  const btn=document.getElementById('monoBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ '+t('monoLoading'); }
+  try{
+    const r=await fetch('https://api.monobank.ua/bank/currency');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const uah={UAH:1};
+    j.forEach(x=>{
+      const cur=MONO_CODES[x.currencyCodeA];
+      if(cur && x.currencyCodeB===980){
+        const mid=(x.rateBuy&&x.rateSell)?(x.rateBuy+x.rateSell)/2:(x.rateCross||x.rateSell||x.rateBuy);
+        if(mid) uah[cur]=mid;
+      }
+    });
+    const base=db.settings.base, baseUah=uah[base];
+    if(!baseUah) throw new Error('no base rate');
+    CURRENCIES.forEach(c=>{ if(uah[c]) db.settings.rates[c]=+(uah[c]/baseUah).toFixed(4); });
+    db.settings.rates[base]=1;
+    db.settings.ratesUpdated=todayISO();
+    save(); renderSettings(); renderIncome();
+    alert(t('monoOk'));
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🏦 '+t('monoRates'); }
+    alert(t('monoErr'));
+  }
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='oblik-backup-'+todayISO()+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(input){
+  const file=input.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{ try{ const d=JSON.parse(e.target.result); db=normalize(d); save(); applyStaticTexts(); renderAll(); switchTab('orders'); alert('OK'); }catch(err){ alert('Error: '+err.message); } };
+  r.readAsText(file);
+}
+function clearAll(){
+  if(!confirm(t('confirmClear')))return;
+  localStorage.removeItem(KEY); db=load(); applyStaticTexts(); renderAll(); switchTab('orders');
+}
+
+/* ============ helpers / sheet ============ */
+function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function emptyBox(e,msg){ return `<div class="empty"><div class="e">${e}</div>${esc(msg)}</div>`; }
+function openSheet(){ document.getElementById('overlay').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeSheet(){ document.getElementById('overlay').classList.remove('open'); document.body.style.overflow=''; }
+document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeSheet(); });
+
+/* ============ swipe between tabs ============ */
+const TAB_ORDER=['orders','clients','stores','watches','income','settings'];
+function handleSwipe(dx,dy){
+  if(document.getElementById('overlay').classList.contains('open')) return; // not while a sheet is open
+  if(Math.abs(dx)<60 || Math.abs(dx)<Math.abs(dy)*1.5) return;              // mostly-horizontal, min distance
+  const cur=document.querySelector('nav button.active').id.replace('nav-','');
+  const i=TAB_ORDER.indexOf(cur);
+  if(dx<0 && i<TAB_ORDER.length-1) switchTab(TAB_ORDER[i+1]);   // swipe left → next tab
+  else if(dx>0 && i>0) switchTab(TAB_ORDER[i-1]);               // swipe right → previous tab
+}
+let _swX=null,_swY=null;
+document.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1){ _swX=null; return; }
+  _swX=e.touches[0].clientX; _swY=e.touches[0].clientY;
+},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(_swX===null) return;
+  const tt=e.changedTouches[0];
+  handleSwipe(tt.clientX-_swX, tt.clientY-_swY);
+  _swX=null;
+},{passive:true});
+
+/* ============ boot ============ */
+applyStaticTexts();
+renderOrders();
+</script>
+</body>
+</html>
