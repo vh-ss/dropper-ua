@@ -233,7 +233,7 @@
   <!-- WATCHES -->
   <section id="tab-watches" class="tab">
     <div class="toolbar">
-      <button class="btn sec" style="flex:1" onclick="updatePricesBulk()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.18em"><path d="M4.5 11a7.5 7.5 0 0 1 13-4.7M18 4v3.5h-3.5"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.7M6 20v-3.5h3.5"/></svg> <span data-t="updatePrices"></span></button>
+      <button id="bulkPriceBtn" class="btn sec" style="flex:1" onclick="updatePricesBulk()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.18em"><path d="M4.5 11a7.5 7.5 0 0 1 13-4.7M18 4v3.5h-3.5"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.7M6 20v-3.5h3.5"/></svg> <span data-t="updatePrices"></span></button>
       <button class="btn" style="flex:1" onclick="openWatch()">+ <span data-t="addWatch"></span></button>
     </div>
     <div class="note" data-t="watchNote"></div>
@@ -286,7 +286,9 @@ const I18N = {
     allStatuses:"Всі статуси",
     st:["Нове","Викуплено","В дорозі","Отримано","Видано клієнту"],
     paid:"Оплачено", unpaid:"Не оплачено", partial:"Частково", clientsWord:"клієнтів",
-    watchNote:"Кнопка «Оновити ціни»: за наявності інтернету пробує підтягнути ціну за посиланням (працює не на всіх сайтах через захист). Якщо не вдалось — введеш вручну. Працює і офлайн.",
+    watchNote:"Кнопка «Оновити ціни» автоматично тягне ціни за посиланнями (потрібен інтернет; через захист сайтів спрацьовує не всюди). Де не вдалось — онови ціну вручну.",
+    needOnline:"Потрібен інтернет для авто-оновлення цін.", noLinks:"Додай посилання на товари, щоб тягнути ціни автоматично.",
+    autoDone:"Готово. Оновлено: {u} · без змін: {n} · не вдалось: {f}",
     // order form
     newOrder:"Нове замовлення", editOrder:"Редагувати замовлення",
     client:"Клієнт", chooseClient:"— оберіть клієнта —", newClientInline:"+ Новий", noClient:"Без клієнта",
@@ -357,7 +359,9 @@ const I18N = {
     allStatuses:"All statuses",
     st:["New","Purchased","In transit","Received","Handed to client"],
     paid:"Paid", unpaid:"Unpaid", partial:"Partial", clientsWord:"clients",
-    watchNote:"“Update prices” button: when online it tries to fetch the price by link (won't work on every site due to protection). If it fails, you enter it manually. Works offline too.",
+    watchNote:"“Update prices” auto-fetches prices by link (needs internet; won't work on every site due to protection). Where it fails, update the price manually.",
+    needOnline:"Internet is required to auto-update prices.", noLinks:"Add product links to fetch prices automatically.",
+    autoDone:"Done. Updated: {u} · unchanged: {n} · failed: {f}",
     newOrder:"New order", editOrder:"Edit order",
     client:"Client", chooseClient:"— choose client —", newClientInline:"+ New", noClient:"No client",
     store:"Store / site", orderNo:"Order №", purchaseDate:"Purchase date",
@@ -409,7 +413,7 @@ function t(k){ return (I18N[db.settings.lang]||I18N.ua)[k]; }
 
 /* ============ state ============ */
 const KEY="buyer_oblik_db";
-const APP_VERSION="1.3 · 2026-06-20"; // версія деплою — бампати вручну при змінах
+const APP_VERSION="1.4 · 2026-06-20"; // версія деплою — бампати вручну при змінах
 const CURRENCIES=["USD","EUR","PLN","UAH"];
 const CUR_SYM={USD:"$",EUR:"€",PLN:"zł",UAH:"₴"};
 const NETWORKS=["instagram","tiktok","threads","facebook","telegram","other"];
@@ -1391,33 +1395,64 @@ function promptUpdatePrice(id){
   w.priceHistory.push({date:todayISO(),price:p});
   save(); renderWatches();
 }
+let _bulkBusy=false;
 async function updatePricesBulk(){
-  if(!db.watches.length){ alert(t('emptyWatches')); return; }
-  // Try online auto-fetch where possible; fallback to manual prompts.
-  for(const w of db.watches){
-    let got=null;
-    if(navigator.onLine && w.link){
-      got=await tryAutoFetch(w.link);
-    }
-    if(got!=null){
+  if(_bulkBusy) return;
+  const withLink=db.watches.filter(w=>w.link);
+  if(!withLink.length){ alert(db.watches.length?t('noLinks'):t('emptyWatches')); return; }
+  if(!navigator.onLine){ alert(t('needOnline')); return; }
+  _bulkBusy=true;
+  const btn=document.getElementById('bulkPriceBtn'); if(btn){ btn.disabled=true; btn.dataset.busy='1'; }
+  let updated=0, unchanged=0, failed=0;
+  for(const w of withLink){
+    const got=await tryAutoFetch(w.link);
+    if(got!=null && !isNaN(got) && got>0){
       const cur=watchCurrent(w);
-      if(cur!==got) w.priceHistory.push({date:todayISO(),price:got});
-    } else {
-      const cur=watchCurrent(w);
-      const v=prompt((w.title||t('noName'))+' — '+t('enterNewPrice')+' ('+w.currency+')', cur!=null?cur:'');
-      if(v!==null){ const p=parseFloat(v); if(!isNaN(p)){ if(cur!==p) w.priceHistory.push({date:todayISO(),price:p}); } }
-    }
+      if(cur!==got){ w.priceHistory.push({date:todayISO(),price:got}); updated++; } else unchanged++;
+    } else failed++;
   }
-  save(); renderWatches();
+  _bulkBusy=false; if(btn){ btn.disabled=false; btn.dataset.busy=''; } save(); renderWatches();
+  alert(t('autoDone').replace('{u}',updated).replace('{n}',unchanged).replace('{f}',failed));
 }
+// Fetch a product page and extract its price. Direct fetch first (works on CORS-open sites),
+// then public CORS proxies. Returns a number or null (then the user can update manually).
 async function tryAutoFetch(url){
-  // Best-effort: most shops block cross-origin reads (CORS) so this usually fails → manual.
-  try{
-    const res=await fetch(url,{mode:'cors'});
-    const html=await res.text();
-    const m=html.match(/[\$€]\s?(\d+[.,]\d{2})/) || html.match(/"price"\s*:\s*"?(\d+[.,]\d{2})/i);
-    if(m) return parseFloat(m[1].replace(',','.'));
-  }catch(e){ /* expected for protected sites */ }
+  const html=await fetchPage(url);
+  return html ? extractPrice(html) : null;
+}
+async function fetchWithTimeout(u, ms){
+  const ctl=new AbortController(); const id=setTimeout(()=>ctl.abort(), ms||9000);
+  try{ const r=await fetch(u,{signal:ctl.signal}); if(r.ok){ const t=await r.text(); if(t&&t.length>200) return t; } }
+  catch(e){} finally{ clearTimeout(id); }
+  return null;
+}
+async function fetchPage(url){
+  const tries=[
+    url,                                                          // direct (CORS-open sites)
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(url),
+    'https://corsproxy.io/?url='+encodeURIComponent(url)
+  ];
+  for(const u of tries){ const t=await fetchWithTimeout(u,9000); if(t) return t; }
+  return null;
+}
+function priceNum(s){ s=(s||'').replace(/[^\d.,]/g,''); if(!s) return null;
+  const ld=s.lastIndexOf('.'), lc=s.lastIndexOf(',');
+  const dec = ld>lc ? '.' : (lc>ld ? ',' : '');                         // last separator = decimal point
+  if(dec){ s=s.split(dec==='.'?',':'.').join(''); if(dec===',') s=s.replace(',','.'); }
+  const n=parseFloat(s); return isNaN(n)?null:n;
+}
+function extractPrice(html){
+  let m;
+  m=html.match(/property=["'](?:product:price:amount|og:price:amount)["']\s+content=["']([\d.,\s]+)["']/i)
+   || html.match(/content=["']([\d.,\s]+)["']\s+property=["'](?:product:price:amount|og:price:amount)["']/i);
+  if(m) return priceNum(m[1]);
+  m=html.match(/itemprop=["']price["'][^>]*content=["']([\d.,\s]+)["']/i)
+   || html.match(/content=["']([\d.,\s]+)["'][^>]*itemprop=["']price["']/i);
+  if(m) return priceNum(m[1]);
+  m=html.match(/"(?:price|lowPrice|salePrice|currentPrice)"\s*:\s*"?([\d.,]{1,14})"?/i);
+  if(m) return priceNum(m[1]);
+  m=html.match(/[$€£₴]\s?(\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?)/);       // visible currency price
+  if(m) return priceNum(m[1]);
   return null;
 }
 
