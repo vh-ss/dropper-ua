@@ -1566,7 +1566,7 @@ function exportData(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='oblik-backup-'+todayISO()+'.json';
+  a.download='dropperua-backup-'+todayISO()+'.json';
   a.click(); URL.revokeObjectURL(a.href);
 }
 function importData(input){
