@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dropper UA — Інструкція користувача</title>
+<style>
+  :root{
+    --bg:#f3f4fb; --card:#ffffff; --ink:#1c1e33; --muted:#6b7194; --line:#e1e4f0;
+    --brand:#4c1d95; --accent:#7c3aed; --green:#16a34a; --red:#dc2626; --amber:#d97706;
+    --radius:16px; --shadow:0 1px 3px rgba(60,40,120,.06),0 8px 24px rgba(60,40,120,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0f1020; --card:#1b1c33; --ink:#eef0ff; --muted:#9aa0c7; --line:#2c2e52;
+      --brand:#eef0ff; --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
+  header.hero{
+    background:linear-gradient(135deg,#4c1d95,#7c3aed);
+    color:#fff; padding:48px 0 40px; border-bottom:1px solid var(--line);
+  }
+  .hero .wrap{display:flex; align-items:center; gap:18px; flex-wrap:wrap}
+  .logo{display:grid; place-items:center; width:64px; height:64px; border-radius:18px;
+    background:rgba(255,255,255,.14); flex:none; box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  .logo svg{width:42px; height:42px; display:block}
+  .hero h1{margin:0; font-size:30px; letter-spacing:-.02em}
+  .hero p{margin:6px 0 0; color:#e5ddfb; max-width:62ch}
+  .layout{display:grid; grid-template-columns:250px 1fr; gap:32px; padding:32px 0 64px}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr} nav.toc{position:static!important} }
+  nav.toc{position:sticky; top:20px; align-self:start; max-height:calc(100vh - 40px); overflow:auto;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; box-shadow:var(--shadow)}
+  nav.toc strong{display:block; font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin:0 0 10px}
+  nav.toc a{display:block; padding:6px 10px; border-radius:9px; color:var(--ink);
+    text-decoration:none; font-size:14px}
+  nav.toc a:hover{background:var(--bg)}
+  section{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:26px 28px; margin:0 0 22px; box-shadow:var(--shadow)}
+  section h2{margin:0 0 4px; font-size:22px; letter-spacing:-.01em; display:flex; gap:10px; align-items:center}
+  section h2 .num{display:grid; place-items:center; width:30px; height:30px; flex:none;
+    background:var(--accent); color:#fff; border-radius:9px; font-size:15px; font-weight:700}
+  section h3{margin:24px 0 6px; font-size:17px}
+  p{margin:8px 0}
+  ul,ol{margin:8px 0; padding-left:22px}
+  li{margin:5px 0}
+  a{color:var(--accent)}
+  code{background:var(--bg); border:1px solid var(--line); border-radius:6px;
+    padding:1px 6px; font:13.5px/1 ui-monospace,"SF Mono",Consolas,monospace}
+  .lead{color:var(--muted); font-size:15.5px}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:14px}
+  .feat{border:1px solid var(--line); border-radius:13px; padding:14px 16px; background:var(--bg)}
+  .feat .ic{font-size:22px}
+  .feat b{display:block; margin:6px 0 2px}
+  .feat span{color:var(--muted); font-size:14px}
+  ol.steps{counter-reset:s; list-style:none; padding:0; margin:14px 0}
+  ol.steps>li{counter-increment:s; position:relative; padding:10px 0 10px 44px; border-bottom:1px dashed var(--line)}
+  ol.steps>li:last-child{border-bottom:0}
+  ol.steps>li::before{content:counter(s); position:absolute; left:0; top:9px;
+    width:30px; height:30px; display:grid; place-items:center; border-radius:50%;
+    background:var(--brand); color:var(--bg); font-weight:700; font-size:14px}
+  .note{display:flex; gap:12px; padding:13px 15px; border-radius:12px; margin:14px 0;
+    border:1px solid var(--line); background:var(--bg)}
+  .note .tag{flex:none; font-size:20px; line-height:1.3}
+  .note.tip{border-color:#bbf7d0; background:#f0fdf4; color:#14532d}
+  .note.warn{border-color:#fde68a; background:#fffbeb; color:#78350f}
+  .note.info{border-color:#ddd6fe; background:#f5f3ff; color:#4c1d95}
+  @media (prefers-color-scheme: dark){
+    .note.tip{background:#0c1f15; color:#bbf7d0; border-color:#14532d}
+    .note.warn{background:#241a05; color:#fde68a; border-color:#78350f}
+    .note.info{background:#1a1330; color:#ddd6fe; border-color:#4c1d95}
+  }
+  .pill{display:inline-block; padding:2px 10px; border-radius:999px; font-size:13px; font-weight:600; white-space:nowrap}
+  .pill.g{background:rgba(22,163,74,.14); color:var(--green)}
+  .pill.r{background:rgba(220,38,38,.12); color:var(--red)}
+  .pill.a{background:rgba(124,58,237,.14); color:var(--accent)}
+  .pill.w{background:rgba(217,119,6,.15); color:var(--amber)}
+  .flow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; font-size:14px}
+  .flow .st{background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-weight:600}
+  .flow .ar{color:var(--muted)}
+  /* Скріншоти (мобільні) */
+  figure.shot{margin:16px 0; text-align:center}
+  figure.shot img{max-width:330px; width:100%; border:1px solid var(--line); border-radius:20px;
+    box-shadow:var(--shadow); display:block; margin:0 auto}
+  figure.shot figcaption{color:var(--muted); font-size:13px; margin-top:9px}
+  .shots-row{display:flex; gap:22px; flex-wrap:wrap; justify-content:center; align-items:flex-start; margin:16px 0}
+  .shots-row figure{margin:0; flex:0 1 300px}
+  details{border:1px solid var(--line); border-radius:12px; padding:4px 16px; margin:10px 0; background:var(--bg)}
+  details>summary{cursor:pointer; font-weight:600; padding:10px 0; list-style:none}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:"＋"; color:var(--accent); margin-right:10px; font-weight:700}
+  details[open]>summary::before{content:"－"}
+  details p{margin:4px 0 12px; color:var(--muted)}
+  footer{color:var(--muted); text-align:center; padding:30px 0 50px; font-size:14px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Dropper UA">
+        <path d="M4.5 11C4.5 6.9 8 4 12 4s7.5 2.9 7.5 7c-2 2.5-3.5 2.5-5 .2-1 2-2 2-3 0-1.5 2.3-3 2.3-5-.2Z"/>
+        <path d="M6 11l4 4M12 4.5v10.5M18 11l-4 4"/>
+        <rect x="9.5" y="15" width="5" height="4.5" rx="1"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Dropper UA — Інструкція користувача</h1>
+      <p>Облік для баєр-сервісу: замовлення, викуп з іноземних сайтів, клієнти, посилки з трекінгом,
+         ціни та дохід. Працює офлайн у браузері телефона. Ця інструкція — з покроковими прикладами
+         та скріншотами.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap layout">
+
+  <nav class="toc">
+    <strong>Зміст</strong>
+    <a href="#start">1. З чого почати</a>
+    <a href="#tour">2. Знайомство з екраном</a>
+    <a href="#orders">3. Замовлення</a>
+    <a href="#status">4. Статуси замовлення</a>
+    <a href="#ship">5. На відправку (посилки)</a>
+    <a href="#clients">6. Клієнти</a>
+    <a href="#stores">7. Магазини</a>
+    <a href="#prices">8. Ціни</a>
+    <a href="#income">9. Дохід</a>
+    <a href="#data">10. Дані, валюти, бекап</a>
+    <a href="#faq">11. Питання й відповіді</a>
+  </nav>
+
+  <main>
+
+    <!-- 1 -->
+    <section id="start">
+      <h2><span class="num">1</span> З чого почати</h2>
+      <p class="lead">Dropper UA відкривається у браузері. Встановлювати нічого не потрібно.</p>
+      <ol class="steps">
+        <li>Відкрийте застосунок: за посиланням (якщо розміщений онлайн) або файл <code>index.html</code>.</li>
+        <li>Заведіть <b>магазини</b>, з яких купуєте, і <b>клієнтів</b> (можна й на ходу, прямо із замовлення).</li>
+        <li>Створіть перше <b>замовлення</b>, додайте в нього товари з цінами закупки та продажу.</li>
+        <li>Коли товар приходить — пакуйте його в <b>посилку</b> з ТТН і відправляйте клієнту.</li>
+        <li>Час від часу робіть <b>Експорт у файл</b> (вкладка «Дані») — це ваша резервна копія.</li>
+      </ol>
+      <div class="note info"><span class="tag">💾</span>
+        <div>Усі дані зберігаються <b>лише на вашому пристрої</b>, у пам'яті браузера. Вони нікуди не
+        надсилаються. Тому єдина надійна копія — це <b>Експорт</b> у файл.</div>
+      </div>
+      <div class="note warn"><span class="tag">⚠️</span>
+        <div>Не користуйтеся режимом «інкогніто» для постійної роботи — браузер очистить дані після
+        закриття. І не тисніть «очистити дані сайтів / кеш» для цієї сторінки без свіжого бекапу.</div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section id="tour">
+      <h2><span class="num">2</span> Знайомство з екраном</h2>
+      <p>Знизу — <b>панель вкладок</b>: Замовлення, На відправку, Клієнти, Магазини, Ціни, Дохід, Дані.
+         Між вкладками можна також гортати <b>свайпом</b> вліво/вправо. Угорі праворуч — перемикач
+         <b>теми</b> (світла/темна/авто) і <b>мови</b> (UA/EN).</p>
+      <figure class="shot"><img loading="lazy" src="help-img/orders.png" alt="Вкладка Замовлення">
+        <figcaption>Головний екран — «Замовлення»: пошук, фільтри за статусом, картки замовлень</figcaption></figure>
+      <div class="grid">
+        <div class="feat"><div class="ic">📦</div><b>Замовлення</b><span>Викуп і облік товарів по клієнтах</span></div>
+        <div class="feat"><div class="ic">🚚</div><b>На відправку</b><span>Пакування в посилки з ТТН і трекінгом</span></div>
+        <div class="feat"><div class="ic">👤</div><b>Клієнти</b><span>Контакти, адреси, борги</span></div>
+        <div class="feat"><div class="ic">🏬</div><b>Магазини</b><span>Сайти закупки + аналітика</span></div>
+        <div class="feat"><div class="ic">🏷️</div><b>Ціни</b><span>Трекінг цін зі знижками</span></div>
+        <div class="feat"><div class="ic">📊</div><b>Дохід</b><span>Оборот, прибуток, борги</span></div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="orders">
+      <h2><span class="num">3</span> Замовлення</h2>
+      <p>Замовлення — це покупка на сайті: магазин, № замовлення, дата й <b>товари</b>. У кожного товару
+         свій <b>клієнт</b>, ціна закупки та ціна для клієнта — і закупка та продаж можуть бути в
+         <b>різних валютах</b> (додаток зводить усе в базову валюту).</p>
+      <div class="shots-row">
+        <figure class="shot"><img loading="lazy" src="help-img/order-view.png" alt="Перегляд замовлення">
+          <figcaption>Перегляд замовлення (лише читання)</figcaption></figure>
+        <figure class="shot"><img loading="lazy" src="help-img/order-form.png" alt="Редагування замовлення">
+          <figcaption>Форма редагування з товарами</figcaption></figure>
+      </div>
+      <h3>Як додати замовлення</h3>
+      <ol class="steps">
+        <li>На вкладці <b>Замовлення</b> натисніть <b>«+ Замовлення»</b>.</li>
+        <li>Оберіть <b>магазин</b> (або створіть новий кнопкою «+ Новий»), впишіть <b>№ замовлення</b> й дату.</li>
+        <li>Додайте товари: назва, артикул, розмір, кількість, <b>ціна закупки</b> й <b>ціна клієнту</b>
+            (кожна — у своїй валюті).</li>
+        <li>Для кожного товару виберіть <b>клієнта</b>. У межах одного замовлення товари можуть бути
+            для різних клієнтів.</li>
+        <li>За потреби додайте <b>фото</b> та <b>посилання</b> на товар.</li>
+        <li>Натисніть <b>Зберегти</b>.</li>
+      </ol>
+      <div class="note tip"><span class="tag">💳</span>
+        <div><b>Часткова оплата.</b> У полі «Оплачено клієнтом» вкажіть, скільки клієнт уже сплатив за
+        товар — додаток покаже залишок і позначку «частково». Кнопка «Повністю» ставить повну суму.</div>
+      </div>
+      <h3>Перегляд і редагування</h3>
+      <p>Тап по картці відкриває <b>перегляд</b> замовлення (лише читання) з підсумком продажу, закупки
+         й прибутку. Щоб змінити — тисніть <b>«Редагувати»</b>. Закрити вікно можна кнопкою
+         <b>«Закрити»</b> або <b>подвійним тапом</b> по темному фону поза вікном.</p>
+      <div class="note info"><span class="tag">🗄️</span>
+        <div>Замовлення зі статусом <b>«Видано клієнту»</b> ховаються у згорнутий <b>архів</b> унизу
+        списку, щоб не заважати. Тап по заголовку «Видані (архів)» — розгортає його.</div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="status">
+      <h2><span class="num">4</span> Статуси замовлення</h2>
+      <p>Статус показує, на якому етапі замовлення. Порядок такий:</p>
+      <div class="flow">
+        <span class="st">Нове</span><span class="ar">→</span>
+        <span class="st">Викуплено</span><span class="ar">→</span>
+        <span class="st">В дорозі</span><span class="ar">→</span>
+        <span class="st">Отримано</span><span class="ar">→</span>
+        <span class="st">Видано клієнту</span>
+      </div>
+      <ul>
+        <li><b>Тап по бейджу статусу</b> у списку просуває його вперед — але <b>лише до «Отримано»</b>.</li>
+        <li>Далі статус змінюється <b>тільки через ручне редагування</b> замовлення (форма → поле «Статус»).</li>
+        <li><b>«Видано клієнту»</b> зазвичай ставиться <b>автоматично</b>, коли клієнт отримав посилку
+            (див. розділ 5). Вручну його теж можна виставити у формі редагування.</li>
+        <li>Коли замовлення вже <b>«В дорозі»</b> — товари в ньому <b>зафіксовано</b>: їх не можна змінювати,
+            дозволено лише <b>зняти клієнта</b> з товару (зробити «без клієнта»).</li>
+      </ul>
+      <div class="note tip"><span class="tag">💱</span>
+        <div>Курс валют для замовлення <b>фіксується</b>, щойно статус доходить до «Викуплено» — далі
+        прибуток рахується за курсом на день викупу й не «пливе» від зміни курсів.</div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="ship">
+      <h2><span class="num">5</span> На відправку (посилки)</h2>
+      <p>Коли замовлення доходить до статусу <b>«Отримано»</b>, його товари з'являються тут, згруповані
+         за клієнтом і готові до пакування в посилку.</p>
+      <figure class="shot"><img loading="lazy" src="help-img/ship.png" alt="Вкладка На відправку">
+        <figcaption>«На відправку»: активні посилки, товари готові до пакування, архів доставлених</figcaption></figure>
+      <h3>Як сформувати посилку</h3>
+      <ol class="steps">
+        <li>У групі клієнта позначте <b>галочками</b> товари, які кладете в посилку.</li>
+        <li>Натисніть <b>«Створити посилку»</b>.</li>
+        <li>Оберіть <b>оператора</b> (Нова Пошта, Укрпошта тощо) і впишіть <b>ТТН</b> — він обов'язковий.</li>
+        <li>Збережіть. Кнопка <b>«Трекінг»</b> на посилці відкриє сайт оператора за цим ТТН.</li>
+      </ol>
+      <div class="note tip"><span class="tag">🧾</span>
+        <div><b>Товари без клієнта.</b> Якщо пакуєте товари, у яких клієнт не вказаний, оберіть клієнта
+        прямо у формі посилки — він проставиться і на посилку, і на самі товари.</div>
+      </div>
+      <h3>Життєвий цикл посилки</h3>
+      <div class="flow">
+        <span class="st">Відправлено</span><span class="ar">→</span>
+        <span class="st">В дорозі</span><span class="ar">→</span>
+        <span class="st">Доставлено</span><span class="ar">→</span>
+        <span class="st">Отримано клієнтом</span>
+      </div>
+      <p>Тап по бейджу посилки просуває її статус. Коли посилка стає <b>«Отримано клієнтом»</b>,
+         відповідне замовлення автоматично переходить у <b>«Видано клієнту»</b>, а сама посилка
+         ховається в архів <b>«Доставлені»</b> внизу вкладки.</p>
+      <div class="note info"><span class="tag">↩️</span>
+        <div>Якщо видалити посилку, її товари повертаються в «готові до відправки», а замовлення
+        автоматично відкочується з «Видано» назад у «Отримано».</div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section id="clients">
+      <h2><span class="num">6</span> Клієнти</h2>
+      <p>Клієнт — це отримувач замовлень. Картка містить ПІБ, нік, телефони, соцмережі та адреси доставки.</p>
+      <div class="shots-row">
+        <figure class="shot"><img loading="lazy" src="help-img/clients.png" alt="Список клієнтів">
+          <figcaption>Список клієнтів — боржники вгорі</figcaption></figure>
+        <figure class="shot"><img loading="lazy" src="help-img/client.png" alt="Картка клієнта">
+          <figcaption>Картка клієнта з його замовленнями</figcaption></figure>
+      </div>
+      <ul>
+        <li><b>Контакти:</b> кілька телефонів, соцмережі (Instagram, TikTok, Threads, Facebook, Telegram)
+            — іконки клікабельні й ведуть у профіль.</li>
+        <li><b>Адреси доставки:</b> Нова Пошта, Укрпошта та інші — з номером відділення/адресою.</li>
+        <li><b>Пошук</b> згори миттєво знаходить клієнта за ім'ям, ніком чи телефоном — зручно, коли
+            прийшла його посилка.</li>
+        <li><b>Боржники</b> показані вгорі списку; на картці видно, скільки замовлень і скільки клієнт
+            ще винен. Угорі — загальна сума боргів.</li>
+      </ul>
+      <div class="note tip"><span class="tag">🔎</span>
+        <div>Усі поля вибору (клієнт, магазин, оператор) — це <b>пошукові</b> списки: почніть вводити,
+        і потрібний варіант знайдеться швидше.</div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section id="stores">
+      <h2><span class="num">7</span> Магазини</h2>
+      <p>Ведіть сайти/магазини, з яких купуєте, окремими записами. Це не лише зручний вибір у замовленні —
+         на цьому будується <b>розбивка доходу по магазинах</b> у вкладці «Дохід».</p>
+      <div class="note info"><span class="tag">➕</span>
+        <div>Новий магазин можна створити прямо у формі замовлення кнопкою <b>«+ Новий»</b> біля поля
+        «Магазин» — не обов'язково спершу йти на окрему вкладку.</div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section id="prices">
+      <h2><span class="num">8</span> Ціни</h2>
+      <p>Окремий список товарів, за цінами яких ви стежите (наприклад, чекаєте знижку перед викупом).</p>
+      <figure class="shot"><img loading="lazy" src="help-img/prices.png" alt="Вкладка Ціни">
+        <figcaption>«Ціни»: відстежувані товари, знижені — вгорі</figcaption></figure>
+      <ul>
+        <li>Кнопка <b>«Оновити ціни»</b> пробує підтягнути свіжі ціни онлайн (працює для багатьох
+            магазинів і <b>враховує знижки</b>).</li>
+        <li>Де автоматично не вдалось — впишіть ціну <b>вручну</b>; додаток збереже історію змін.</li>
+        <li>Товари, у яких ціна <b>впала</b>, піднімаються вгору списку — щоб одразу бачити вигідні моменти.</li>
+      </ul>
+    </section>
+
+    <!-- 9 -->
+    <section id="income">
+      <h2><span class="num">9</span> Дохід</h2>
+      <p>Зведення по грошах за обраний період.</p>
+      <figure class="shot"><img loading="lazy" src="help-img/income.png" alt="Вкладка Дохід">
+        <figcaption>«Дохід»: оборот, прибуток, графік, розбивки, борги</figcaption></figure>
+      <ul>
+        <li>Оберіть <b>період</b> (все / цей місяць / попередній) або власний діапазон дат.</li>
+        <li>Загальний <b>оборот</b> і <b>прибуток</b> у базовій валюті, графік прибутку по місяцях.</li>
+        <li>Розбивки <b>по магазинах</b> і <b>по клієнтах</b>.</li>
+        <li><b>Отримано</b> (продаж) і <b>Витрачено</b> (закупка) — по кожній валюті окремо, з рядком
+            <b>«Разом»</b>, зведеним у базову валюту.</li>
+        <li>Скільки клієнтів ще не оплатили та <b>загальний борг</b>.</li>
+      </ul>
+    </section>
+
+    <!-- 10 -->
+    <section id="data">
+      <h2><span class="num">10</span> Дані, валюти та бекап</h2>
+      <p>Вкладка <b>«Дані»</b> — налаштування й безпека ваших даних.</p>
+      <figure class="shot"><img loading="lazy" src="help-img/settings.png" alt="Вкладка Дані">
+        <figcaption>«Дані»: валюти, курси, бекап, тема</figcaption></figure>
+      <h3>Валюти й курси</h3>
+      <ul>
+        <li><b>Базова валюта</b> — у ній зводяться всі підсумки. Курси решти валют — редаговані вручну.</li>
+        <li>Кнопка <b>«Монобанк»</b> підтягує актуальні курси автоматично (за наявності інтернету).</li>
+        <li>Підтримуються USD, EUR, GBP, PLN, UAH.</li>
+      </ul>
+      <h3>Бекап і відновлення</h3>
+      <ol class="steps">
+        <li><b>Експорт у файл</b> — збереже всі дані у файл <code>.json</code>. Робіть це регулярно.</li>
+        <li><b>Імпорт з файлу</b> — відновить дані з такого файлу (напр., на новому телефоні).</li>
+        <li><b>«Відновити попередні дані»</b> — поверне останній автоматичний знімок, якщо щось пішло не так.</li>
+      </ol>
+      <div class="note tip"><span class="tag">📲</span>
+        <div><b>Встановлення на телефон.</b> Відкрийте додаток у браузері телефона → меню →
+        «Додати на головний екран». Далі він працює як звичайний застосунок і <b>офлайн</b>.</div>
+      </div>
+      <div class="note warn"><span class="tag">💾</span>
+        <div>Тримайте копію (Експорт) у надійному місці — чат собі, пошта чи хмара. Додаток нікуди
+        не надсилає ваші дані сам.</div>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section id="faq">
+      <h2><span class="num">11</span> Питання й відповіді</h2>
+      <details>
+        <summary>Що буде, якщо додати товар без клієнта?</summary>
+        <p>Товар збережеться «без клієнта». Клієнта можна проставити пізніше — зокрема прямо під час
+           формування посилки (розділ 5), і він одразу зафіксується на товарі.</p>
+      </details>
+      <details>
+        <summary>Чому не змінюється статус із «Отримано» тапом у списку?</summary>
+        <p>Це навмисно: тапом у списку статус просувається лише до «Отримано». Далі («Видано клієнту»)
+           ставиться автоматично при отриманні посилки або вручну через «Редагувати».</p>
+      </details>
+      <details>
+        <summary>Не можу відредагувати товар у замовленні — чому?</summary>
+        <p>Коли замовлення вже «В дорозі», товари зафіксовано. Дозволено лише зняти клієнта з товару.
+           Це захищає вже відправлені замовлення від випадкових змін.</p>
+      </details>
+      <details>
+        <summary>Закупка й продаж у різних валютах — це нормально?</summary>
+        <p>Так. Кожна ціна має свою валюту; додаток зводить усе в базову валюту за курсами з вкладки
+           «Дані». Курс замовлення фіксується на статусі «Викуплено».</p>
+      </details>
+      <details>
+        <summary>Я випадково все видалив. Що робити?</summary>
+        <p>На вкладці «Дані» натисніть <b>«Відновити попередні дані»</b> (останній автознімок). Якщо
+           робили Експорт — скористайтеся Імпортом цього файлу.</p>
+      </details>
+      <details>
+        <summary>Чи можна змінити мову й тему?</summary>
+        <p>Так. Українська та English, а також світла/темна/авто тема — усе вгорі екрана та у вкладці «Дані».</p>
+      </details>
+      <details>
+        <summary>Як перенести додаток на новий телефон?</summary>
+        <p>На старому: Експорт у файл. На новому: відкрийте додаток і зробіть Імпорт цього файлу.</p>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  Dropper UA — облік для баєр-сервісу · Інструкція користувача · Працює офлайн у вашому браузері
+</footer>
+
+</body>
+</html>
