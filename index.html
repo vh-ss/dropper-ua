@@ -321,7 +321,7 @@ const I18N = {
     noChange:"без змін",
     // income
     periodAll:"За весь час", periodMonth:"Цей місяць",
-    totalRevenue:"Загальний оборот", totalProfit:"Загальний прибуток",
+    totalRevenue:"Загальний оборот", totalProfit:"Загальний прибуток", totalInBase:"Разом",
     byCurrency:"По валютах", inBase:"Разом у базовій валюті",
     received:"Отримано (продаж)", spent:"Витрачено (закупка)",
     byStatus:"По статусах", unpaidClients:"Не оплатили", ordersCount:"Замовлень",
@@ -393,7 +393,7 @@ const I18N = {
     updatePrice:"Update price", priceHistory:"Price history", enterNewPrice:"Enter new price",
     noChange:"no change",
     periodAll:"All time", periodMonth:"This month",
-    totalRevenue:"Total revenue", totalProfit:"Total profit",
+    totalRevenue:"Total revenue", totalProfit:"Total profit", totalInBase:"Total",
     byCurrency:"By currency", inBase:"Total in base currency",
     received:"Received (sales)", spent:"Spent (purchases)",
     byStatus:"By status", unpaidClients:"Unpaid", ordersCount:"Orders",
@@ -1645,8 +1645,13 @@ function renderIncome(){
       byClient[cn].rev+=itemTotal(it,rr); byClient[cn].prof+=itemTotal(it,rr)-itemCost(it,rr);
     });
   });
-  const curList=obj=>Object.entries(obj).filter(([,v])=>v).map(([c,v])=>
-    `<div class="stat"><span>${c}</span><span class="big">${money(v,c)}</span></div>`).join('')||`<div class="muted" style="padding:8px 0">—</div>`;
+  const curList=(obj,totalBase)=>{
+    const rows=Object.entries(obj).filter(([,v])=>v).map(([c,v])=>
+      `<div class="stat"><span>${c}</span><span class="big">${money(v,c)}</span></div>`).join('');
+    const totalRow = (totalBase!=null)
+      ? `<div class="stat" style="border-top:2px solid var(--border); margin-top:2px"><span>${t('totalInBase')} (${base})</span><span class="big">${money(totalBase,base)}</span></div>` : '';
+    return (rows||`<div class="muted" style="padding:8px 0">—</div>`)+totalRow;
+  };
   const grpList=obj=>Object.entries(obj).sort((a,b)=>b[1].rev-a[1].rev).map(([name,v])=>
     `<div class="stat"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(name)}</span><span style="text-align:right; flex:0 0 auto">${money(v.rev,base)} · <span class="${v.prof>=0?'profit':'loss'}">${money(v.prof,base)}</span></span></div>`
     ).join('')||`<div class="muted" style="padding:8px 0">—</div>`;
@@ -1671,11 +1676,11 @@ function renderIncome(){
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:6px">${t('received')}</div>
-      ${curList(received)}
+      ${curList(received, baseRev)}
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:6px">${t('spent')}</div>
-      ${curList(spent)}
+      ${curList(spent, baseRev-baseProf)}
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:6px">${t('byStatus')}</div>
