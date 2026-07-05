@@ -291,7 +291,7 @@ const I18N = {
     needOnline:"Потрібен інтернет для авто-оновлення цін.", noLinks:"Додай посилання на товари, щоб тягнути ціни автоматично.",
     autoDone:"Готово. Оновлено: {u} · без змін: {n} · не вдалось: {f}",
     // order form
-    newOrder:"Нове замовлення", editOrder:"Редагувати замовлення",
+    newOrder:"Нове замовлення", editOrder:"Редагувати замовлення", viewOrder:"Замовлення",
     client:"Клієнт", chooseClient:"— оберіть клієнта —", newClientInline:"+ Новий", noClient:"Без клієнта",
     store:"Магазин / сайт", orderNo:"№ замовлення", purchaseDate:"Дата викупу",
     currency:"Валюта", status:"Статус", tracking:"Трек-номер", clientPaidQ:"Клієнт оплатив",
@@ -364,7 +364,7 @@ const I18N = {
     watchNote:"“Update prices” auto-fetches prices by link (needs internet; won't work on every site due to protection). Where it fails, update the price manually.",
     needOnline:"Internet is required to auto-update prices.", noLinks:"Add product links to fetch prices automatically.",
     autoDone:"Done. Updated: {u} · unchanged: {n} · failed: {f}",
-    newOrder:"New order", editOrder:"Edit order",
+    newOrder:"New order", editOrder:"Edit order", viewOrder:"Order",
     client:"Client", chooseClient:"— choose client —", newClientInline:"+ New", noClient:"No client",
     store:"Store / site", orderNo:"Order №", purchaseDate:"Purchase date",
     currency:"Currency", status:"Status", tracking:"Tracking №", clientPaidQ:"Client paid",
@@ -415,7 +415,7 @@ function t(k){ return (I18N[db.settings.lang]||I18N.ua)[k]; }
 
 /* ============ state ============ */
 const KEY="buyer_oblik_db";
-const APP_VERSION="1.7 · 2026-06-20"; // версія деплою — бампати вручну при змінах
+const APP_VERSION="1.8 · 2026-07-05"; // версія деплою — бампати вручну при змінах
 const CURRENCIES=["USD","EUR","GBP","PLN","UAH"];
 const CUR_SYM={USD:"$",EUR:"€",GBP:"£",PLN:"zł",UAH:"₴"};
 const NETWORKS=["instagram","tiktok","threads","facebook","telegram","other"];
@@ -686,7 +686,7 @@ function renderOrders(){
     const pillCls=ps==='all'?'paid':ps==='partial'?'st0':'unpaid';
     const pillTxt=ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid');
     const thumbs=(o.items||[]).filter(i=>i.photo).slice(0,5).map(i=>`<img class="thumb" src="${esc(i.photo)}" alt="">`).join('');
-    return `<div class="card" onclick="openOrder('${o.id}')">
+    return `<div class="card" onclick="viewOrder('${o.id}')">
       <div class="row">
         <div>
           <div class="big">${esc(storeName(o))} ${o.orderNumber?'<span class="muted">#'+esc(o.orderNumber)+'</span>':''}</div>
@@ -711,6 +711,61 @@ function cycleStatus(id){
   o.status=((o.status||0)+1)%t('st').length;  // tap to advance, wraps back to Нове
   ensureRateLock(o); // freeze FX rate once it reaches "Викуплено"
   save(); renderOrders();
+}
+
+// read-only order view — tapping a card opens this; edit is one tap away
+function viewOrder(id){
+  const o=db.orders.find(x=>x.id===id); if(!o){ openOrder(); return; }
+  const base=db.settings.base, r=orderRates(o);
+  const ps=orderPaidState(o), pillCls=ps==='all'?'paid':ps==='partial'?'st0':'unpaid';
+  const pillTxt=ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid');
+  const items=(o.items||[]).map(it=>{
+    const profB=itemTotal(it,r)-itemCost(it,r), has=(it.cost||it.priceForClient);
+    const cl=it.clientId?clientById(it.clientId):null;
+    const par=parcelOfItem(it.id);
+    return `<div class="itemcard">
+      <div class="row" style="align-items:flex-start; gap:8px">
+        ${it.photo?`<img class="thumb" src="${esc(it.photo)}" alt="" style="flex:0 0 auto; cursor:pointer" onclick="showItemPhoto('${it.id}')">`:''}
+        <div style="flex:1; min-width:0">
+          <b>${esc(it.title||t('noName'))}</b>${it.size?` <span class="muted">(${esc(it.size)})</span>`:''}${itemQty(it)>1?` <span class="muted">×${itemQty(it)}</span>`:''}${it.article?` <span class="muted">· ${esc(it.article)}</span>`:''}
+          <div class="sub">${ico('user',14)} ${cl?esc(clientLabel(cl)):t('noClient')} ${itemPaidBadge(it)}</div>
+          ${has?`<div class="sub">${t('cost')}: ${money(Number(it.cost)||0,it.costCur||base)} · ${t('priceForClient')}: ${money(Number(it.priceForClient)||0,it.priceCur||base)} · <span class="${profB>=0?'profit':'loss'}">${profB>=0?'+':''}${money(profB,base)}</span></div>`:''}
+          <div class="sub">${itemPayHint(it)}</div>
+          ${par?`<div class="sub">${ico('truck',14)} ${esc(t('parcelSt')[par.status||0])}${par.ttn?' · '+esc(par.ttn):''}</div>`:''}
+          ${it.link?`<div class="sub"><a href="${esc(it.link)}" target="_blank" rel="noopener">${ico('link',14)} ${t('link')}</a></div>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  const sheet=document.getElementById('sheet');
+  sheet.innerHTML=`
+    <div class="row" style="align-items:flex-start">
+      <div style="min-width:0">
+        <h2 style="margin-bottom:2px">${esc(storeName(o))} ${o.orderNumber?`<span class="muted">#${esc(o.orderNumber)}</span>`:''}</h2>
+        <div class="sub">${ico('cal',14)} ${esc(o.purchaseDate||'')} · ${ico('user',14)} ${esc(orderClientsLabel(o))}</div>
+      </div>
+      <span class="pill tap st${o.status||0}" onclick="cycleStatus('${o.id}');viewOrder('${o.id}')" title="${t('status')}">${esc(t('st')[o.status||0])}</span>
+    </div>
+    ${o.trackingNumber?`<div class="sub" style="margin-top:6px">${t('tracking')}: <b>${esc(o.trackingNumber)}</b></div>`:''}
+
+    <h2 style="font-size:15px; margin:14px 0 8px">${t('items')} (${(o.items||[]).length})</h2>
+    ${items||`<div class="muted">—</div>`}
+
+    <div class="totbar" style="margin-top:12px">
+      <div style="width:100%; display:flex; flex-direction:column; gap:5px">
+        <div style="display:flex; justify-content:space-between"><span>${t('salesWord')}</span><b>${money(orderTotal(o),base)}</b></div>
+        <div style="display:flex; justify-content:space-between"><span>${t('cost')}</span><b>${money(orderCost(o),base)}</b></div>
+        <div style="display:flex; justify-content:space-between"><span>${t('orderProfit')}</span><b class="${orderProfit(o)>=0?'profit':'loss'}">${orderProfit(o)>=0?'+':''}${money(orderProfit(o),base)}</b></div>
+        <div style="display:flex; justify-content:space-between; align-items:center"><span>${t('paidAmountLabel')}</span><span class="pill ${pillCls}">${pillTxt}</span></div>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn danger" onclick="deleteOrder('${o.id}')">${t('del')}</button>
+      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn" onclick="openOrder('${o.id}')">${ico('edit',16)} ${t('edit')}</button>
+    </div>`;
+  openSheet();
 }
 
 let editOrderRates=null; // rate snapshot used for the order being edited
@@ -1077,7 +1132,7 @@ function itemMenu(itemId){
 }
 function showItemOrder(itemId){
   const f=findItem(itemId); if(!f) return;
-  closeSheet(); openOrder(f.o.id);
+  closeSheet(); viewOrder(f.o.id);
 }
 function showItemPhoto(itemId){
   const f=findItem(itemId); if(!f) return;
@@ -1150,7 +1205,7 @@ function openClient(id){
         ords.map(o=>{ const r=orderRates(o), its=clientItems(o,c.id);
           const unp=its.reduce((s,i)=>s+itemUnpaidBase(i,r),0), sub=clientSubtotalBase(o,c.id);
           const pay = unp<=0.01?t('paid') : (unp>=sub-0.01?t('unpaid') : t('partlyWord'));
-          return `<div class="itemcard" onclick="closeSheet();openOrder('${o.id}')">
+          return `<div class="itemcard" onclick="closeSheet();viewOrder('${o.id}')">
           <div class="row"><b>${esc(storeName(o))} ${o.orderNumber?'#'+esc(o.orderNumber):''}</b>
           <span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span></div>
           <div class="sub">${esc(o.purchaseDate||'')} · ${money(sub,db.settings.base)} · ${pay}</div>
@@ -1276,7 +1331,7 @@ function openStore(id){
     if(ords.length){
       ordersHtml=`<h2 style="font-size:15px;margin:16px 0 8px">${t('navOrders')} (${ords.length})</h2>`+
         ords.map(o=>{ const ps=orderPaidState(o);
-          return `<div class="itemcard" onclick="closeSheet();openOrder('${o.id}')">
+          return `<div class="itemcard" onclick="closeSheet();viewOrder('${o.id}')">
           <div class="row"><b>${esc(o.orderNumber?'#'+o.orderNumber:t('noName'))}</b><span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span></div>
           <div class="sub">${esc(o.purchaseDate||'')} · ${money(orderTotal(o),db.settings.base)} · ${ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid')}</div>
         </div>`; }).join('');
