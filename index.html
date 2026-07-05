@@ -815,7 +815,7 @@ function openOrder(id){
     <div class="grid2">
       <div class="field"><label>${t('purchaseDate')}</label><input id="f_date" type="date" value="${esc(o?o.purchaseDate:todayISO())}"></div>
       <div class="field"><label>${t('status')}</label>
-        <select id="f_status" ${curSt===4?'disabled':''}>${t('st').map((s,i)=> (i<=3 || i===curSt) ? `<option value="${i}" ${curSt===i?'selected':''}>${esc(s)}</option>` : '').join('')}</select>
+        <select id="f_status">${t('st').map((s,i)=>`<option value="${i}" ${curSt===i?'selected':''}>${esc(s)}</option>`).join('')}</select>
       </div>
     </div>
     <div class="field"><label>${t('tracking')}</label><input id="f_track" value="${esc(o?o.trackingNumber:'')}"></div>
