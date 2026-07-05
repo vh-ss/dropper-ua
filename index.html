@@ -683,7 +683,7 @@ function orderCard(o){
           <div class="big">${esc(storeName(o))} ${o.orderNumber?'<span class="muted">#'+esc(o.orderNumber)+'</span>':''}</div>
           <div class="sub">${ico('cal',14)} ${esc(o.purchaseDate||'')} · ${ico('user',14)} ${esc(orderClientsLabel(o))}</div>
         </div>
-        <span class="pill tap st${o.status||0}" onclick="event.stopPropagation();cycleStatus('${o.id}')" title="${esc(t('status'))}">${esc(t('st')[o.status||0])}</span>
+        <span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span>
       </div>
       <div class="row" style="margin-top:8px; align-items:flex-start">
         <div>
@@ -725,13 +725,6 @@ function renderOrders(){
   }
   wrap.innerHTML=html;
 }
-function cycleStatus(id){
-  const o=db.orders.find(x=>x.id===id); if(!o)return;
-  if((o.status||0)>=4) return; // "Видано клієнту" is set only when the parcel is received — never by hand
-  o.status=((o.status||0)+1)%4; // manual advance 0→1→2→3→0; can't reach "Видано" manually
-  ensureRateLock(o); // freeze FX rate once it reaches "Викуплено"
-  save(); renderOrders();
-}
 
 // read-only order view — tapping a card opens this; edit is one tap away
 function viewOrder(id){
@@ -764,7 +757,7 @@ function viewOrder(id){
         <h2 style="margin-bottom:2px">${esc(storeName(o))} ${o.orderNumber?`<span class="muted">#${esc(o.orderNumber)}</span>`:''}</h2>
         <div class="sub">${ico('cal',14)} ${esc(o.purchaseDate||'')} · ${ico('user',14)} ${esc(orderClientsLabel(o))}</div>
       </div>
-      <span class="pill tap st${o.status||0}" onclick="cycleStatus('${o.id}');viewOrder('${o.id}')" title="${t('status')}">${esc(t('st')[o.status||0])}</span>
+      <span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span>
     </div>
     ${o.trackingNumber?`<div class="sub" style="margin-top:6px">${t('tracking')}: <b>${esc(o.trackingNumber)}</b></div>`:''}
 
