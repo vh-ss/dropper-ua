@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#6d28d9">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Dropper UA — облік викупів</title>
@@ -306,6 +308,7 @@ const I18N = {
     chartProfit:"Прибуток по місяцях", totalOwed:"Всього винні", fromLabel:"З", toLabel:"По",
     periodPrev:"Минулий місяць", queueAll:"Всі",
     save:"Зберегти", cancel:"Скасувати", del:"Видалити", edit:"Редагувати", close:"Закрити",
+    newVersion:"Доступна нова версія", updateNow:"Оновити", later:"Пізніше",
     // client form
     newClient:"Новий клієнт", editClient:"Клієнт",
     fullName:"ПІБ (прізвище, ім'я, по батькові)", nick:"Нік / мітка (необов.)", notes:"Нотатки",
@@ -382,6 +385,7 @@ const I18N = {
     chartProfit:"Profit by month", totalOwed:"Total owed", fromLabel:"From", toLabel:"To",
     periodPrev:"Last month", queueAll:"All",
     save:"Save", cancel:"Cancel", del:"Delete", edit:"Edit", close:"Close",
+    newVersion:"A new version is available", updateNow:"Update", later:"Later",
     newClient:"New client", editClient:"Client",
     fullName:"Full name", nick:"Nick / label (optional)", notes:"Notes",
     phones:"Phones", addPhone:"+ Phone", phone:"Phone number",
@@ -1880,6 +1884,34 @@ db=load(); // all functions/consts (uid, _uidCounter, normalize…) are defined 
 applyTheme();
 applyStaticTexts();
 renderOrders();
+
+/* ============ PWA: service worker + "нова версія" плашка (лише на http/https) ============ */
+function showUpdateBar(reg){
+  if(document.getElementById('upd-bar')) return;
+  const bar=document.createElement('div');
+  bar.id='upd-bar';
+  bar.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:10000;max-width:var(--appW);margin:0 auto;background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:var(--shadow)';
+  bar.innerHTML=`<span style="font-size:13px">${t('newVersion')}</span>
+    <span style="display:flex;gap:8px"><button class="btn sm" id="upd-now">${t('updateNow')}</button><button class="btn sm sec" id="upd-later">${t('later')}</button></span>`;
+  document.body.appendChild(bar);
+  document.getElementById('upd-now').onclick=()=>{ bar.remove();
+    if(reg.waiting){ navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true}); reg.waiting.postMessage('skipWaiting'); }
+    else location.reload();
+  };
+  document.getElementById('upd-later').onclick=()=>bar.remove();
+}
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('sw.js');
+      if(reg.waiting && navigator.serviceWorker.controller) showUpdateBar(reg);
+      reg.addEventListener('updatefound',()=>{ const nw=reg.installing; if(!nw) return;
+        nw.addEventListener('statechange',()=>{ if(nw.state==='installed' && navigator.serviceWorker.controller) showUpdateBar(reg); });
+      });
+      setInterval(()=>reg.update().catch(()=>{}), 60*60*1000); // раз на годину
+    }catch(e){}
+  });
+}
 </script>
 </body>
 </html>
