@@ -31,6 +31,10 @@ jobs:
           cp index.html .nojekyll manifest.webmanifest sw.js _site/
           cp "Інструкція-користувача.html" _site/
           cp -r help-img icons _site/
+          # штампуємо версію коротким git-хешем (як у MoneyMe) — у показ APP_VERSION і в кеш SW BUILD
+          SHA="$(git rev-parse --short HEAD)"
+          sed -i "s/const APP_VERSION=\"[^\"]*\"/const APP_VERSION=\"$SHA\"/" _site/index.html
+          sed -i "s/const BUILD = '[^']*'/const BUILD = '$SHA'/" _site/sw.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
