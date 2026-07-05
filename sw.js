@@ -1,7 +1,7 @@
 /* Dropper UA service worker — офлайн-кеш оболонки застосунку (як у MoneyMe).
    Дані застосунку живуть у localStorage (не тут); SW кешує лише статику,
    щоб усе відкривалося без мережі. Cross-origin запити (Monobank, CORS-проксі) не чіпаємо. */
-const BUILD = '__BUILD__';   // підставляється деплой-workflow (git SHA) — новий кеш на кожен деплой
+const BUILD = 'v1.8';   // бампати разом з APP_VERSION у index.html — новий кеш на кожен реліз
 const CACHE = 'dropper-shell-' + BUILD;
 const ASSETS = [
   './',

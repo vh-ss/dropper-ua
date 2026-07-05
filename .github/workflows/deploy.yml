@@ -31,8 +31,6 @@ jobs:
           cp index.html .nojekyll manifest.webmanifest sw.js _site/
           cp "Інструкція-користувача.html" _site/
           cp -r help-img icons _site/
-          # штампуємо BUILD у sw.js хешем коміту → новий кеш на кожен деплой
-          sed -i "s/__BUILD__/${GITHUB_SHA}/" _site/sw.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
