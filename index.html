@@ -275,6 +275,7 @@ const I18N = {
     ttn:"ТТН (номер накладної)", track:"Трекінг", shipped:"Відправлено", itemsWord:"шт.",
     parcelSt:["Відправлено","В дорозі","Доставлено","Отримано клієнтом"], deliveredTitle:"Доставлені",
     ttnRequired:"Вкажи ТТН для посилки", selectItemsFirst:"Постав галочки на товарах", parcelDate:"Дата відправки",
+    clientRequired:"Вкажи клієнта для посилки",
     noTrackingForCarrier:"Для цього оператора авто-трекінгу немає", confirmDelParcel:"Видалити посилку? Товари повернуться у список на відправку.",
     parcelContents:"Вміст посилки",
     menuShowOrder:"Показати замовлення", menuShowPhoto:"Показати збільшене фото", noPhoto:"У товару немає фото",
@@ -349,6 +350,7 @@ const I18N = {
     ttn:"Tracking № (waybill)", track:"Track", shipped:"Shipped", itemsWord:"pcs",
     parcelSt:["Shipped","In transit","Delivered","Received by client"], deliveredTitle:"Delivered",
     ttnRequired:"Enter the parcel's tracking number", selectItemsFirst:"Tick some items", parcelDate:"Ship date",
+    clientRequired:"Pick a client for the parcel",
     noTrackingForCarrier:"No auto-tracking for this carrier", confirmDelParcel:"Delete parcel? Items return to the to-ship list.",
     parcelContents:"Parcel contents",
     menuShowOrder:"Show order", menuShowPhoto:"Show enlarged photo", noPhoto:"This item has no photo",
@@ -1078,7 +1080,10 @@ function openParcel(clientId, ids, parcelId){
   const sheet=document.getElementById('sheet');
   sheet.innerHTML=`
     <h2>${p?t('editParcel'):t('newParcel')}</h2>
-    <div class="field"><label>${t('client')}</label><input value="${esc(clientLabel(c))}" disabled></div>
+    <div class="field"><label>${t('client')}</label>
+      <input id="p_client" list="parcelClientsDL" value="${esc(c?clientLabel(c):'')}" placeholder="${t('chooseClient')}" autocomplete="off" style="width:100%">
+      <datalist id="parcelClientsDL">${db.clients.map(x=>`<option value="${esc(clientLabel(x))}">`).join('')}</datalist>
+    </div>
     <div class="field"><label>${t('carrier')}</label>
       <select id="p_carrier" class="search" style="width:100%">${CARRIERS.map(x=>`<option value="${x.id}" ${defCarrier===x.id?'selected':''}>${esc(carrierName(x))}</option>`).join('')}</select>
     </div>
@@ -1099,9 +1104,17 @@ function saveParcel(parcelId, clientId, ids){
   const carrier=document.getElementById('p_carrier').value;
   const ttn=document.getElementById('p_ttn').value.trim();
   const date=document.getElementById('p_date').value;
+  // resolve chosen client from the searchable combobox (label → id)
+  const cv=(document.getElementById('p_client').value||'').trim().toLowerCase();
+  const chosen=db.clients.find(x=>clientLabel(x).toLowerCase()===cv);
   if(!ttn){ alert(t('ttnRequired')); return; }
-  if(parcelId){ const p=db.parcels.find(x=>x.id===parcelId); p.carrier=carrier; p.ttn=ttn; p.date=date; }
-  else db.parcels.push({id:uid(), clientId:clientId||null, carrier, ttn, date, items:(ids||[]).slice(), status:0});
+  if(!chosen){ alert(t('clientRequired')); return; }
+  const cid=chosen.id;
+  const itemIds=(parcelId ? ((db.parcels.find(x=>x.id===parcelId)||{}).items||[]) : (ids||[])).slice();
+  // stamp the chosen client onto the packed items (fixes "без клієнта" items)
+  itemIds.forEach(id=>{ const f=findItem(id); if(f) f.it.clientId=cid; });
+  if(parcelId){ const p=db.parcels.find(x=>x.id===parcelId); p.clientId=cid; p.carrier=carrier; p.ttn=ttn; p.date=date; }
+  else db.parcels.push({id:uid(), clientId:cid, carrier, ttn, date, items:itemIds, status:0});
   syncOrderStatuses(); // packing alone doesn't deliver — order advances only when the parcel is received
   save(); closeSheet(); renderShip(); renderOrders();
 }
