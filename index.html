@@ -273,6 +273,7 @@ const I18N = {
     parcelsTitle:"Посилки", toPackTitle:"Готові до відправки", emptyShip:"Немає товарів до відправки",
     createParcel:"Створити посилку", newParcel:"Нова посилка", editParcel:"Посилка", carrier:"Поштовий оператор",
     ttn:"ТТН (номер накладної)", track:"Трекінг", shipped:"Відправлено", itemsWord:"шт.",
+    parcelSt:["Відправлено","В дорозі","Доставлено","Отримано клієнтом"], deliveredTitle:"Доставлені",
     ttnRequired:"Вкажи ТТН для посилки", selectItemsFirst:"Постав галочки на товарах", parcelDate:"Дата відправки",
     noTrackingForCarrier:"Для цього оператора авто-трекінгу немає", confirmDelParcel:"Видалити посилку? Товари повернуться у список на відправку.",
     parcelContents:"Вміст посилки",
@@ -346,6 +347,7 @@ const I18N = {
     parcelsTitle:"Parcels", toPackTitle:"Ready to ship", emptyShip:"Nothing to ship",
     createParcel:"Create parcel", newParcel:"New parcel", editParcel:"Parcel", carrier:"Carrier",
     ttn:"Tracking № (waybill)", track:"Track", shipped:"Shipped", itemsWord:"pcs",
+    parcelSt:["Shipped","In transit","Delivered","Received by client"], deliveredTitle:"Delivered",
     ttnRequired:"Enter the parcel's tracking number", selectItemsFirst:"Tick some items", parcelDate:"Ship date",
     noTrackingForCarrier:"No auto-tracking for this carrier", confirmDelParcel:"Delete parcel? Items return to the to-ship list.",
     parcelContents:"Parcel contents",
@@ -413,7 +415,7 @@ function t(k){ return (I18N[db.settings.lang]||I18N.ua)[k]; }
 
 /* ============ state ============ */
 const KEY="buyer_oblik_db";
-const APP_VERSION="1.6 · 2026-06-20"; // версія деплою — бампати вручну при змінах
+const APP_VERSION="1.7 · 2026-06-20"; // версія деплою — бампати вручну при змінах
 const CURRENCIES=["USD","EUR","GBP","PLN","UAH"];
 const CUR_SYM={USD:"$",EUR:"€",GBP:"£",PLN:"zł",UAH:"₴"};
 const NETWORKS=["instagram","tiktok","threads","facebook","telegram","other"];
@@ -524,7 +526,7 @@ function normalize(d){
     o.storeId=st.id;
   });
   d.watches=d.watches||[];
-  d.parcels=d.parcels||[]; // shipments: {id, clientId, carrier, ttn, date, items:[itemId...]}
+  d.parcels=(d.parcels||[]).map(p=>{ if(p.status===undefined)p.status=0; return p; }); // {id,clientId,carrier,ttn,date,items[],status 0..3}
   d.settings=Object.assign({lang:"ua", base:"USD", theme:"auto", rates:{USD:1, EUR:1.08, GBP:1.27, PLN:0.25, UAH:0.024}}, d.settings||{});
   d.settings.rates=Object.assign({USD:1,EUR:1.08,GBP:1.27,PLN:0.25,UAH:0.024}, d.settings.rates||{});
   return d;
@@ -934,37 +936,51 @@ function deleteOrder(id){
 /* ============ SHIP (parcels) ============ */
 function packedItemIds(){ const s=new Set(); (db.parcels||[]).forEach(p=>(p.items||[]).forEach(id=>s.add(id))); return s; }
 function findItem(id){ for(const o of db.orders){ for(const it of (o.items||[])){ if(it.id===id) return {it,o}; } } return null; }
-function orderFullyPacked(o,packed){ const its=o.items||[]; return its.length>0 && its.every(i=>packed.has(i.id)); }
+function parcelOfItem(id){ return (db.parcels||[]).find(p=>(p.items||[]).includes(id)); }
+// order → "Видано клієнту"(4) only when every item sits in a parcel that's "Отримано клієнтом"(3); revert if not.
+function syncOrderStatuses(){
+  db.orders.forEach(o=>{ const its=o.items||[]; if(!its.length) return;
+    const allReceived = its.every(it=>{ const p=parcelOfItem(it.id); return p && (p.status||0)>=3; });
+    if(allReceived && o.status===3) o.status=4;
+    else if(!allReceived && o.status===4) o.status=3;
+  });
+}
+function setParcelStatus(id){ const p=(db.parcels||[]).find(x=>x.id===id); if(!p)return;
+  p.status=((p.status||0)+1)%4; syncOrderStatuses(); save(); renderShip(); renderOrders(); } // tap to advance the parcel state
+let showDelivered=false;
+function toggleDelivered(){ showDelivered=!showDelivered; renderShip(); }
+function parcelCard(p){
+  const c=clientById(p.clientId), carr=carrierById(p.carrier);
+  const its=(p.items||[]).map(findItem).filter(Boolean);
+  const titles=its.map(x=>esc(x.it.title||t('noName'))).join(' · ');
+  const canTrack=!!carr.url && p.ttn; const st=p.status||0;
+  return `<div class="card">
+    <div class="row">
+      <div style="min-width:0"><b>${esc(clientLabel(c))}</b>
+        <div class="sub">${ico('truck',14)} ${esc(carrierName(carr))} · ${its.length} ${t('itemsWord')}${p.date?' · '+esc(p.date):''}</div></div>
+      <span class="pill tap st${st}" onclick="setParcelStatus('${p.id}')" title="${t('status')}">${esc(t('parcelSt')[st])}</span>
+    </div>
+    <div class="sub" style="margin-top:4px">${t('ttn')}: <b>${esc(p.ttn||'—')}</b></div>
+    ${titles?`<div class="sub">${titles}</div>`:''}
+    <div class="row" style="margin-top:8px; gap:6px">
+      ${canTrack?`<button class="btn sm" onclick="trackParcel('${p.id}')">${ico('search',15)} ${t('track')}</button>`:''}
+      <button class="btn sm sec" onclick="openParcel(null,null,'${p.id}')">${t('edit')}</button>
+      <button class="btn sm danger" onclick="deleteParcel('${p.id}')">${ico('x',14)}</button>
+    </div>
+  </div>`;
+}
 function renderShip(){
-  const wrap=document.getElementById('shipView'); const base=db.settings.base;
+  const wrap=document.getElementById('shipView');
   const packed=packedItemIds();
   let html='';
-  // active parcels
   const parcels=(db.parcels||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  if(parcels.length){
-    html+=`<div class="muted" style="margin:4px 0 8px">${t('parcelsTitle')} (${parcels.length})</div>`;
-    html+=parcels.map(p=>{
-      const c=clientById(p.clientId), carr=carrierById(p.carrier);
-      const its=(p.items||[]).map(findItem).filter(Boolean);
-      const titles=its.map(x=>esc(x.it.title||t('noName'))).join(' · ');
-      const canTrack=!!carr.url && p.ttn;
-      return `<div class="card">
-        <div class="row">
-          <div style="min-width:0"><b>${esc(clientLabel(c))}</b>
-            <div class="sub">${ico('truck',14)} ${esc(carrierName(carr))} · ${its.length} ${t('itemsWord')}${p.date?' · '+esc(p.date):''}</div></div>
-          <span class="pill st2">${t('shipped')}</span>
-        </div>
-        <div class="sub" style="margin-top:4px">${t('ttn')}: <b>${esc(p.ttn||'—')}</b></div>
-        ${titles?`<div class="sub">${titles}</div>`:''}
-        <div class="row" style="margin-top:8px; gap:6px">
-          ${canTrack?`<button class="btn sm" onclick="trackParcel('${p.id}')">${ico('search',15)} ${t('track')}</button>`:''}
-          <button class="btn sm sec" onclick="openParcel(null,null,'${p.id}')">${t('edit')}</button>
-          <button class="btn sm danger" onclick="deleteParcel('${p.id}')">${ico('x',14)}</button>
-        </div>
-      </div>`;
-    }).join('');
+  const active=parcels.filter(p=>(p.status||0)<3), done=parcels.filter(p=>(p.status||0)>=3);
+  // active parcels (not yet received by client)
+  if(active.length){
+    html+=`<div class="muted" style="margin:4px 0 8px">${t('parcelsTitle')} (${active.length})</div>`;
+    html+=active.map(parcelCard).join('');
   }
-  // ready to ship: received (status "Отримано") items not yet packed, grouped by client
+  // ready to ship: received ("Отримано") items not yet packed, grouped by client
   const ready=[]; db.orders.forEach(o=>{ if(o.status===3) (o.items||[]).forEach(it=>{ if(!packed.has(it.id)) ready.push({it,o}); }); });
   html+=`<div class="muted" style="margin:14px 0 8px">${t('toPackTitle')} (${ready.length})</div>`;
   if(!ready.length){ html+=emptyBox('truck',t('emptyShip')); }
@@ -984,6 +1000,11 @@ function renderShip(){
           </div>`).join('')}</div>
       </div>`;
     }).join('');
+  }
+  // delivered parcels — archived, collapsible so they don't clutter the active list
+  if(done.length){
+    html+=`<div class="muted" style="margin:14px 0 8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center" onclick="toggleDelivered()"><span>${t('deliveredTitle')} (${done.length})</span><span>${showDelivered?'▾':'▸'}</span></div>`;
+    if(showDelivered) html+=done.map(parcelCard).join('');
   }
   wrap.innerHTML=html;
 }
@@ -1026,15 +1047,15 @@ function saveParcel(parcelId, clientId, ids){
   const date=document.getElementById('p_date').value;
   if(!ttn){ alert(t('ttnRequired')); return; }
   if(parcelId){ const p=db.parcels.find(x=>x.id===parcelId); p.carrier=carrier; p.ttn=ttn; p.date=date; }
-  else db.parcels.push({id:uid(), clientId:clientId||null, carrier, ttn, date, items:(ids||[]).slice()});
-  // auto-advance fully-packed orders to "Видано клієнту"
-  const packed=packedItemIds();
-  db.orders.forEach(o=>{ if(o.status===3 && orderFullyPacked(o,packed)) o.status=4; });
+  else db.parcels.push({id:uid(), clientId:clientId||null, carrier, ttn, date, items:(ids||[]).slice(), status:0});
+  syncOrderStatuses(); // packing alone doesn't deliver — order advances only when the parcel is received
   save(); closeSheet(); renderShip(); renderOrders();
 }
 function deleteParcel(id){
   if(!confirm(t('confirmDelParcel')))return;
-  db.parcels=db.parcels.filter(p=>p.id!==id); save(); closeSheet(); renderShip(); renderOrders();
+  db.parcels=db.parcels.filter(p=>p.id!==id);
+  syncOrderStatuses(); // items return to "готові" → revert any order that was marked delivered
+  save(); closeSheet(); renderShip(); renderOrders();
 }
 function trackParcel(id){
   const p=(db.parcels||[]).find(x=>x.id===id); if(!p)return;
