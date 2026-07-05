@@ -302,7 +302,7 @@ const I18N = {
     orderTotal:"Сума замовлення", orderProfit:"Прибуток", salesWord:"Продаж",
     chartProfit:"Прибуток по місяцях", totalOwed:"Всього винні", fromLabel:"З", toLabel:"По",
     periodPrev:"Минулий місяць", queueAll:"Всі",
-    save:"Зберегти", cancel:"Скасувати", del:"Видалити", edit:"Редагувати",
+    save:"Зберегти", cancel:"Скасувати", del:"Видалити", edit:"Редагувати", close:"Закрити",
     // client form
     newClient:"Новий клієнт", editClient:"Клієнт",
     fullName:"ПІБ (прізвище, ім'я, по батькові)", nick:"Нік / мітка (необов.)", notes:"Нотатки",
@@ -375,7 +375,7 @@ const I18N = {
     orderTotal:"Order total", orderProfit:"Profit", salesWord:"Sales",
     chartProfit:"Profit by month", totalOwed:"Total owed", fromLabel:"From", toLabel:"To",
     periodPrev:"Last month", queueAll:"All",
-    save:"Save", cancel:"Cancel", del:"Delete", edit:"Edit",
+    save:"Save", cancel:"Cancel", del:"Delete", edit:"Edit", close:"Close",
     newClient:"New client", editClient:"Client",
     fullName:"Full name", nick:"Nick / label (optional)", notes:"Notes",
     phones:"Phones", addPhone:"+ Phone", phone:"Phone number",
@@ -761,8 +761,7 @@ function viewOrder(id){
     </div>
 
     <div class="sheet-actions">
-      <button class="btn danger" onclick="deleteOrder('${o.id}')">${t('del')}</button>
-      <button class="btn sec" onclick="closeSheet()">${t('cancel')}</button>
+      <button class="btn sec" onclick="closeSheet()">${t('close')}</button>
       <button class="btn" onclick="openOrder('${o.id}')">${ico('edit',16)} ${t('edit')}</button>
     </div>`;
   openSheet();
@@ -1771,7 +1770,12 @@ function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function emptyBox(e,msg){ const g=ICO_PATHS[e]?`<span style="opacity:.5">${ico(e,42)}</span>`:e; return `<div class="empty"><div class="e">${g}</div>${esc(msg)}</div>`; }
 function openSheet(){ document.getElementById('overlay').classList.add('open'); document.body.style.overflow='hidden'; }
 function closeSheet(){ document.getElementById('overlay').classList.remove('open'); document.body.style.overflow=''; }
-document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeSheet(); });
+let _ovLastTap=0; // close only on a double-tap of the backdrop (avoids accidental single-tap close)
+document.getElementById('overlay').addEventListener('click',e=>{
+  if(e.target.id!=='overlay') return;
+  const now=Date.now();
+  if(now-_ovLastTap<450){ _ovLastTap=0; closeSheet(); } else _ovLastTap=now;
+});
 
 /* ============ swipe between tabs ============ */
 const TAB_ORDER=['orders','ship','clients','stores','watches','income','settings'];
