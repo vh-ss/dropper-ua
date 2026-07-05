@@ -295,6 +295,7 @@ const I18N = {
     // order form
     newOrder:"Нове замовлення", editOrder:"Редагувати замовлення", viewOrder:"Замовлення",
     client:"Клієнт", chooseClient:"— оберіть клієнта —", newClientInline:"+ Новий", noClient:"Без клієнта",
+    removeClient:"Зняти клієнта", itemsLockedHint:"Замовлення в дорозі — товари зафіксовано, можна лише зняти клієнта",
     store:"Магазин / сайт", orderNo:"№ замовлення", purchaseDate:"Дата викупу",
     currency:"Валюта", status:"Статус", tracking:"Трек-номер", clientPaidQ:"Клієнт оплатив",
     paidAmountLabel:"Оплачено клієнтом", fullPay:"Повністю", remaining:"Залишок", partlyWord:"частково",
@@ -370,6 +371,7 @@ const I18N = {
     autoDone:"Done. Updated: {u} · unchanged: {n} · failed: {f}",
     newOrder:"New order", editOrder:"Edit order", viewOrder:"Order",
     client:"Client", chooseClient:"— choose client —", newClientInline:"+ New", noClient:"No client",
+    removeClient:"Remove client", itemsLockedHint:"Order is in transit — items are locked, you can only remove the client",
     store:"Store / site", orderNo:"Order №", purchaseDate:"Purchase date",
     currency:"Currency", status:"Status", tracking:"Tracking №", clientPaidQ:"Client paid",
     paidAmountLabel:"Paid by client", fullPay:"Full", remaining:"Remaining", partlyWord:"partial",
@@ -480,6 +482,7 @@ function carrierName(c){ return c.id==='other' ? t('delivNames').other : c.name;
 let DATA_ERROR=false; // set when stored data couldn't be read — blocks save() so good data is never clobbered
 let db; // initialised in boot (after all helpers/uid are declared — avoids TDZ during migration)
 let editingOrderItems=[]; // working copy while editing order
+let editingOrderLocked=false; // true when the order is "В дорозі"+ — items frozen (client removal only)
 
 function load(){
   let raw=null;
@@ -724,7 +727,8 @@ function renderOrders(){
 }
 function cycleStatus(id){
   const o=db.orders.find(x=>x.id===id); if(!o)return;
-  o.status=((o.status||0)+1)%t('st').length;  // tap to advance, wraps back to Нове
+  if((o.status||0)>=4) return; // "Видано клієнту" is set only when the parcel is received — never by hand
+  o.status=((o.status||0)+1)%4; // manual advance 0→1→2→3→0; can't reach "Видано" manually
   ensureRateLock(o); // freeze FX rate once it reaches "Викуплено"
   save(); renderOrders();
 }
@@ -789,6 +793,8 @@ function openOrder(id){
   const base = db.settings.base;
   editOrderRates = (o&&o.rates) || db.settings.rates; // existing orders keep their locked rate
   editingOrderItems = o ? JSON.parse(JSON.stringify(o.items||[])) : [{title:'',article:'',size:'',qty:1,cost:'',costCur:'USD',priceForClient:'',priceCur:base,clientId:'',paidAmount:0,link:'',photo:'',_open:true}];
+  editingOrderLocked = !!(o && (o.status||0)>=2); // "В дорозі"+ → items frozen, only client removal allowed
+  const curSt = o ? (o.status||0) : 0;
   const storeOpts = db.stores.map(s=>`<option value="${s.id}" ${o&&o.storeId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
   const sheet=document.getElementById('sheet');
   sheet.innerHTML=`
@@ -804,13 +810,16 @@ function openOrder(id){
     <div class="field"><label>${t('orderNo')}</label><input id="f_orderNo" value="${esc(o?o.orderNumber:'')}"></div>
     <div class="grid2">
       <div class="field"><label>${t('purchaseDate')}</label><input id="f_date" type="date" value="${esc(o?o.purchaseDate:todayISO())}"></div>
-      <div class="field"><label>${t('status')}</label><select id="f_status">${t('st').map((s,i)=>`<option value="${i}" ${o&&o.status===i?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+      <div class="field"><label>${t('status')}</label>
+        <select id="f_status" ${curSt===4?'disabled':''}>${t('st').map((s,i)=> (i<=3 || i===curSt) ? `<option value="${i}" ${curSt===i?'selected':''}>${esc(s)}</option>` : '').join('')}</select>
+      </div>
     </div>
     <div class="field"><label>${t('tracking')}</label><input id="f_track" value="${esc(o?o.trackingNumber:'')}"></div>
 
     <h2 style="font-size:15px; margin:14px 0 8px">${t('items')}</h2>
+    ${editingOrderLocked?`<div class="sub" style="margin:-4px 0 8px; color:var(--accent)">${ico('truck',14)} ${t('itemsLockedHint')}</div>`:''}
     <div id="itemsWrap"></div>
-    <button class="btn sm sec" style="width:100%" onclick="addItemRow()">${t('addItem')}</button>
+    ${editingOrderLocked?'':`<button class="btn sm sec" style="width:100%" onclick="addItemRow()">${t('addItem')}</button>`}
 
     <div class="totbar" id="orderTotBar"></div>
 
@@ -888,11 +897,26 @@ function itemExpanded(it,idx,base){
       </div>
     </div>`;
 }
+function itemLocked(it,idx,base){ // read-only card for an in-transit order; only "remove client" is allowed
+  const has=(it.cost||it.priceForClient), cl=it.clientId?clientById(it.clientId):null;
+  return `<div class="itemcard">
+    <div class="row" style="align-items:flex-start; gap:8px">
+      ${it.photo?`<img class="thumb" src="${esc(it.photo)}" alt="" style="flex:0 0 auto">`:''}
+      <div style="flex:1; min-width:0">
+        <b>${esc(it.title||t('noName'))}</b>${it.size?` <span class="muted">(${esc(it.size)})</span>`:''}${itemQty(it)>1?` <span class="muted">×${itemQty(it)}</span>`:''}
+        <div class="sub">${ico('user',14)} ${cl?esc(clientLabel(cl)):t('noClient')} ${itemPaidBadge(it)}</div>
+        ${has?`<div class="sub">${t('cost')}: ${money(Number(it.cost)||0,it.costCur||base)} · ${t('priceForClient')}: ${money(Number(it.priceForClient)||0,it.priceCur||base)}</div>`:''}
+      </div>
+      ${cl?`<button class="btn sm danger" style="flex:0 0 auto" onclick="unassignItemClient(${idx})">${t('removeClient')}</button>`:''}
+    </div>
+  </div>`;
+}
+function unassignItemClient(idx){ editingOrderItems[idx].clientId=null; renderItemEditors(); }
 function renderItemEditors(){
   const base=db.settings.base;
   const wrap=document.getElementById('itemsWrap');
   wrap.innerHTML=`<datalist id="clientsDL">${db.clients.map(c=>`<option value="${esc(clientLabel(c))}">`).join('')}</datalist>`
-    +editingOrderItems.map((it,idx)=> it._open ? itemExpanded(it,idx,base) : itemCollapsed(it,idx,base)).join('');
+    +editingOrderItems.map((it,idx)=> editingOrderLocked ? itemLocked(it,idx,base) : (it._open ? itemExpanded(it,idx,base) : itemCollapsed(it,idx,base))).join('');
   updOrderTotBar();
 }
 function toggleItem(idx){ editingOrderItems[idx]._open=!editingOrderItems[idx]._open; renderItemEditors(); }
