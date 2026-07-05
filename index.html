@@ -683,7 +683,9 @@ function orderCard(o){
           <div class="big">${esc(storeName(o))} ${o.orderNumber?'<span class="muted">#'+esc(o.orderNumber)+'</span>':''}</div>
           <div class="sub">${ico('cal',14)} ${esc(o.purchaseDate||'')} · ${ico('user',14)} ${esc(orderClientsLabel(o))}</div>
         </div>
-        <span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span>
+        ${(o.status||0)<3
+          ? `<span class="pill tap st${o.status||0}" onclick="event.stopPropagation();advanceStatus('${o.id}')" title="${esc(t('status'))}">${esc(t('st')[o.status||0])}</span>`
+          : `<span class="pill st${o.status||0}">${esc(t('st')[o.status||0])}</span>`}
       </div>
       <div class="row" style="margin-top:8px; align-items:flex-start">
         <div>
@@ -695,6 +697,15 @@ function orderCard(o){
       ${thumbs?`<div class="thumbs">${thumbs}</div>`:''}
       <div class="sub" style="margin-top:6px">${(o.items||[]).map(i=>esc(i.title||t('noName'))+(i.size?' ('+esc(i.size)+')':'')).join(' · ')}</div>
     </div>`;
+}
+// quick status advance from the list — only up to "Отримано"(3); never wraps, never sets "Видано"(4)
+function advanceStatus(id){
+  const o=db.orders.find(x=>x.id===id); if(!o)return;
+  const s=o.status||0;
+  if(s>=3) return; // stop at "Отримано"; further stages via parcels / edit form only
+  o.status=s+1;
+  ensureRateLock(o); // freeze FX rate once it reaches "Викуплено"
+  save(); renderOrders();
 }
 let showArchivedOrders=false;
 function toggleArchivedOrders(){ showArchivedOrders=!showArchivedOrders; renderOrders(); }
