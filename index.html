@@ -274,6 +274,7 @@ const I18N = {
     createParcel:"Створити посилку", newParcel:"Нова посилка", editParcel:"Посилка", carrier:"Поштовий оператор",
     ttn:"ТТН (номер накладної)", track:"Трекінг", shipped:"Відправлено", itemsWord:"шт.",
     parcelSt:["Відправлено","В дорозі","Доставлено","Отримано клієнтом"], deliveredTitle:"Доставлені",
+    ordersArchiveTitle:"Видані (архів)",
     ttnRequired:"Вкажи ТТН для посилки", selectItemsFirst:"Постав галочки на товарах", parcelDate:"Дата відправки",
     clientRequired:"Вкажи клієнта для посилки",
     noTrackingForCarrier:"Для цього оператора авто-трекінгу немає", confirmDelParcel:"Видалити посилку? Товари повернуться у список на відправку.",
@@ -349,6 +350,7 @@ const I18N = {
     createParcel:"Create parcel", newParcel:"New parcel", editParcel:"Parcel", carrier:"Carrier",
     ttn:"Tracking № (waybill)", track:"Track", shipped:"Shipped", itemsWord:"pcs",
     parcelSt:["Shipped","In transit","Delivered","Received by client"], deliveredTitle:"Delivered",
+    ordersArchiveTitle:"Delivered (archive)",
     ttnRequired:"Enter the parcel's tracking number", selectItemsFirst:"Tick some items", parcelDate:"Ship date",
     clientRequired:"Pick a client for the parcel",
     noTrackingForCarrier:"No auto-tracking for this carrier", confirmDelParcel:"Delete parcel? Items return to the to-ship list.",
@@ -665,30 +667,14 @@ function renderOrderChips(){
     + t('st').map((s,i)=>chip(String(i),s)).join('')
     + chip('unpaid',t('unpaid'),true);
 }
-function renderOrders(){
-  renderOrderChips();
-  const q=(document.getElementById('orderSearch').value||'').toLowerCase().trim();
-  const wrap=document.getElementById('ordersList');
-  let list=db.orders.slice().sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
-  list=list.filter(orderMatchesFilter);
-  if(q){
-    list=list.filter(o=>{
-      const cls=orderClientIds(o).map(id=>clientById(id)).filter(Boolean);
-      const hay=[storeName(o),o.orderNumber,o.trackingNumber,
-        ...cls.map(clientLabel), ...cls.flatMap(c=>c.phones||[]),
-        ...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
-      return hay.includes(q);
-    });
-  }
-  if(!list.length){ wrap.innerHTML=emptyBox('box',t('emptyOrders')); return; }
+function orderCard(o){
   const base=db.settings.base;
-  wrap.innerHTML=list.map(o=>{
-    const prof=orderProfit(o);
-    const ps=orderPaidState(o);
-    const pillCls=ps==='all'?'paid':ps==='partial'?'st0':'unpaid';
-    const pillTxt=ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid');
-    const thumbs=(o.items||[]).filter(i=>i.photo).slice(0,5).map(i=>`<img class="thumb" src="${esc(i.photo)}" alt="">`).join('');
-    return `<div class="card" onclick="viewOrder('${o.id}')">
+  const prof=orderProfit(o);
+  const ps=orderPaidState(o);
+  const pillCls=ps==='all'?'paid':ps==='partial'?'st0':'unpaid';
+  const pillTxt=ps==='all'?t('paid'):ps==='partial'?t('partial'):t('unpaid');
+  const thumbs=(o.items||[]).filter(i=>i.photo).slice(0,5).map(i=>`<img class="thumb" src="${esc(i.photo)}" alt="">`).join('');
+  return `<div class="card" onclick="viewOrder('${o.id}')">
       <div class="row">
         <div>
           <div class="big">${esc(storeName(o))} ${o.orderNumber?'<span class="muted">#'+esc(o.orderNumber)+'</span>':''}</div>
@@ -706,7 +692,35 @@ function renderOrders(){
       ${thumbs?`<div class="thumbs">${thumbs}</div>`:''}
       <div class="sub" style="margin-top:6px">${(o.items||[]).map(i=>esc(i.title||t('noName'))+(i.size?' ('+esc(i.size)+')':'')).join(' · ')}</div>
     </div>`;
-  }).join('');
+}
+let showArchivedOrders=false;
+function toggleArchivedOrders(){ showArchivedOrders=!showArchivedOrders; renderOrders(); }
+function renderOrders(){
+  renderOrderChips();
+  const q=(document.getElementById('orderSearch').value||'').toLowerCase().trim();
+  const wrap=document.getElementById('ordersList');
+  let list=db.orders.slice().sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+  list=list.filter(orderMatchesFilter);
+  if(q){
+    list=list.filter(o=>{
+      const cls=orderClientIds(o).map(id=>clientById(id)).filter(Boolean);
+      const hay=[storeName(o),o.orderNumber,o.trackingNumber,
+        ...cls.map(clientLabel), ...cls.flatMap(c=>c.phones||[]),
+        ...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  // "Видано клієнту"(4) → collapsible archive, unless the user explicitly filters to that status
+  const archiveMode = orderFilter!=='4';
+  const active = archiveMode ? list.filter(o=>o.status!==4) : list;
+  const archived = archiveMode ? list.filter(o=>o.status===4) : [];
+  if(!active.length && !archived.length){ wrap.innerHTML=emptyBox('box',t('emptyOrders')); return; }
+  let html=active.map(orderCard).join('');
+  if(archived.length){
+    html+=`<div class="muted" style="margin:14px 0 8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center" onclick="toggleArchivedOrders()"><span>${t('ordersArchiveTitle')} (${archived.length})</span><span>${showArchivedOrders?'▾':'▸'}</span></div>`;
+    if(showArchivedOrders) html+=archived.map(orderCard).join('');
+  }
+  wrap.innerHTML=html;
 }
 function cycleStatus(id){
   const o=db.orders.find(x=>x.id===id); if(!o)return;
