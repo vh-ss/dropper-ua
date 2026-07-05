@@ -335,7 +335,7 @@ const I18N = {
     monoErr:"Не вдалось отримати курси (немає інтернету або ліміт 1 запит/хв). Спробуй за хвилину.",
     ratesUpdated:"Оновлено", monoLoading:"Завантаження курсів…",
     dataMgmt:"Дані", export:"Експорт у файл", import:"Імпорт з файлу", restoreData:"Відновити попередні дані", restoreConfirm:"Відновити дані з останнього автоматичного знімка? Поточні буде замінено.", restoreNone:"Немає знімка для відновлення",
-    clearAll:"Очистити всі дані", install:"Встановлення",
+    clearAll:"Очистити всі дані", install:"Встановлення", help:"Довідка", helpTitle:"Як користуватись",
     installHint:"Відкрий цей файл у браузері телефона → меню → «Додати на головний екран».", versionWord:"версія",
     confirmDelOrder:"Видалити це замовлення?", confirmDelClient:"Видалити клієнта? Його замовлення залишаться без клієнта.",
     confirmDelWatch:"Видалити товар з трекінгу?", confirmClear:"Видалити ВСІ дані без відновлення?",
@@ -407,7 +407,7 @@ const I18N = {
     monoErr:"Couldn't fetch rates (no internet or rate limit 1 req/min). Try in a minute.",
     ratesUpdated:"Updated", monoLoading:"Loading rates…",
     dataMgmt:"Data", export:"Export to file", import:"Import from file", restoreData:"Restore previous data", restoreConfirm:"Restore data from the last automatic snapshot? Current data will be replaced.", restoreNone:"No snapshot to restore",
-    clearAll:"Clear all data", install:"Install",
+    clearAll:"Clear all data", install:"Install", help:"Help / Guide", helpTitle:"How to use",
     installHint:"Open this file in your phone browser → menu → “Add to Home Screen”.", versionWord:"version",
     confirmDelOrder:"Delete this order?", confirmDelClient:"Delete client? Their orders stay without a client.",
     confirmDelWatch:"Remove item from tracking?", confirmClear:"Delete ALL data permanently?",
@@ -461,7 +461,8 @@ const ICO_PATHS={
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/>',
   moon:'<path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z"/>',
   themeauto:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/>',
-  parachute:'<path d="M4.5 11C4.5 6.9 8 4 12 4s7.5 2.9 7.5 7c-2 2.5-3.5 2.5-5 .2-1 2-2 2-3 0-1.5 2.3-3 2.3-5-.2Z"/><path d="M6 11l4 4M12 4.5v10.5M18 11l-4 4"/><rect x="9.5" y="15" width="5" height="4.5" rx="1"/>'
+  parachute:'<path d="M4.5 11C4.5 6.9 8 4 12 4s7.5 2.9 7.5 7c-2 2.5-3.5 2.5-5 .2-1 2-2 2-3 0-1.5 2.3-3 2.3-5-.2Z"/><path d="M6 11l4 4M12 4.5v10.5M18 11l-4 4"/><rect x="9.5" y="15" width="5" height="4.5" rx="1"/>',
+  book:'<path d="M12 6.5C10.5 5 8 4.5 4.5 5v13c3.5-.5 6 0 7.5 1.5M12 6.5C13.5 5 16 4.5 19.5 5v13c-3.5-.5-6 0-7.5 1.5M12 6.5V20"/>'
 };
 function ico(name,size){ const p=ICO_PATHS[name]; if(!p) return ''; size=size||16;
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.18em;flex:0 0 auto">${p}</svg>`; }
@@ -1717,9 +1718,134 @@ function renderIncome(){
 }
 
 /* ============ SETTINGS ============ */
+/* ============ HELP / USER GUIDE ============ */
+function openHelp(){
+  document.getElementById('sheet').innerHTML=`
+    <h2>${t('helpTitle')}</h2>
+    <div style="line-height:1.5; font-size:14px">${guideHtml()}</div>
+    <div class="sheet-actions"><button class="btn" style="width:100%" onclick="closeSheet()">${t('close')}</button></div>`;
+  openSheet();
+}
+function guideHtml(){
+  const H='style="color:var(--accent); font-size:15px; margin:18px 0 6px; font-weight:700"';
+  const UL='style="margin:0 0 8px; padding-left:18px"';
+  const P='style="margin:0 0 8px"';
+  if(db.settings.lang==='en'){ return `
+    <p ${P}>This app keeps track of your buyer service — buying goods from foreign sites for your clients. Everything is stored <b>on this device only</b> (offline), so make regular backups (Data → Export).</p>
+    <p ${P}>Switch tabs with the bottom bar or by swiping left/right. The language and colour theme are in <b>Data</b> (this screen).</p>
+
+    <div ${H}>${ico('box',15)} Orders</div>
+    <p ${P}>The core tab. Tap <b>+ Order</b> to add one: choose the store, order № on the site, purchase date and status, then add items.</p>
+    <ul ${UL}>
+      <li>Each item has its own <b>client</b>, <b>purchase cost</b> and <b>client price</b> — the cost and the price can be in <b>different currencies</b> (the app converts everything to your base currency).</li>
+      <li><b>Partial payment</b>: enter how much the client already paid; the app shows the remaining balance.</li>
+      <li>You can attach a <b>photo</b> and a <b>link</b> to each item.</li>
+      <li><b>Status</b>: New → Purchased → In transit → Received → Handed to client. Tap the status badge on a card to advance it — but only up to <b>Received</b>. Anything further is set only in the edit form (or automatically when the parcel reaches the client).</li>
+      <li>Once an order is <b>In transit</b>, its items are locked — you can only remove a client from an item.</li>
+      <li>Tap a card to <b>view</b> it (read-only); press <b>Edit</b> to change it. Close the window with the button or a double-tap outside it.</li>
+      <li>Orders <b>Handed to client</b> move into a collapsible <b>archive</b> at the bottom.</li>
+    </ul>
+
+    <div ${H}>${ico('truck',15)} To ship</div>
+    <p ${P}>When an order reaches <b>Received</b>, its items appear here, grouped by client, ready to pack.</p>
+    <ul ${UL}>
+      <li>Tick the items, press <b>Create parcel</b>, pick the carrier and enter the <b>tracking number (TTN)</b> — it is required.</li>
+      <li>For items with no client yet, choose the client right in the parcel form; it is stamped onto the items too.</li>
+      <li>A parcel has its own stages: Shipped → In transit → Delivered → Received by client. Tap its badge to advance. The <b>Track</b> button opens the carrier's site by the TTN.</li>
+      <li>When the client receives the parcel, the order automatically becomes <b>Handed to client</b>. Received parcels move into the <b>Delivered</b> archive.</li>
+    </ul>
+
+    <div ${H}>${ico('user',15)} Clients</div>
+    <ul ${UL}>
+      <li>A client = full name, nickname, phones, socials (Instagram, TikTok, Threads, Facebook, Telegram) and delivery addresses (Nova Poshta, Ukrposhta…).</li>
+      <li>Use the search on top to find a client instantly when their parcel arrives.</li>
+      <li>Debtors are shown first; each card shows how many orders and how much the client still owes.</li>
+    </ul>
+
+    <div ${H}>${ico('store',15)} Stores</div>
+    <p ${P}>Keep the sites/shops you buy from as separate entries — this powers the per-store income breakdown in the Income tab.</p>
+
+    <div ${H}>${ico('tag',15)} Prices</div>
+    <p ${P}>A watch-list for tracked products. Press <b>Update prices</b> to try pulling fresh prices online (works for many shops, discount-aware); where it can't, enter the price by hand. Items whose price <b>dropped</b> rise to the top.</p>
+
+    <div ${H}>${ico('coins',15)} Income</div>
+    <ul ${UL}>
+      <li>Pick a period (all / this month / previous) or a custom date range.</li>
+      <li>See total revenue and profit in your base currency, a monthly profit chart, and breakdowns by store and by client.</li>
+      <li><b>Received</b> and <b>Spent</b> are listed per currency, each with a <b>Total</b> converted to the base currency.</li>
+      <li>You also see how many clients still owe and the total debt.</li>
+    </ul>
+
+    <div ${H}>${ico('bank',15)} Data (settings)</div>
+    <ul ${UL}>
+      <li><b>Base currency</b> and editable <b>exchange rates</b>; the <b>Monobank</b> button pulls live rates.</li>
+      <li><b>Export</b> saves a backup file, <b>Import</b> restores one. Make backups regularly — the data lives only on this device.</li>
+      <li><b>Restore previous data</b> recovers the last automatic snapshot if something went wrong.</li>
+      <li><b>Install</b>: open the app in your phone browser → menu → “Add to Home Screen”, and it works like a normal app, offline.</li>
+    </ul>
+
+    <p ${P} class="muted">Tip: the app never sends your data anywhere — keep an Export backup somewhere safe (chat to yourself, email, cloud).</p>`;
+  }
+  return `
+    <p ${P}>Цей додаток веде облік вашого баєр-сервісу — викупу товарів з іноземних сайтів на замовлення клієнтів. Усі дані зберігаються <b>лише на цьому пристрої</b> (офлайн), тож регулярно робіть резервні копії (Дані → Експорт).</p>
+    <p ${P}>Вкладки перемикаються нижньою панеллю або свайпом вліво/вправо. Мова й кольорова тема — на вкладці <b>Дані</b> (цей екран).</p>
+
+    <div ${H}>${ico('box',15)} Замовлення</div>
+    <p ${P}>Головна вкладка. Тисніть <b>+ Замовлення</b>, щоб додати: оберіть магазин, № замовлення на сайті, дату викупу й статус, далі додайте товари.</p>
+    <ul ${UL}>
+      <li>У кожного товару свій <b>клієнт</b>, <b>ціна закупки</b> й <b>ціна для клієнта</b> — закупка та продаж можуть бути в <b>різних валютах</b> (додаток зводить усе в базову валюту).</li>
+      <li><b>Часткова оплата</b>: вкажіть, скільки клієнт уже сплатив, — додаток покаже залишок.</li>
+      <li>До товару можна прикріпити <b>фото</b> й <b>посилання</b>.</li>
+      <li><b>Статус</b>: Нове → Викуплено → В дорозі → Отримано → Видано клієнту. Тап по бейджу статусу на картці просуває його — але лише до <b>«Отримано»</b>. Далі статус ставиться тільки у формі редагування (або автоматично, коли посилку отримав клієнт).</li>
+      <li>Коли замовлення вже <b>«В дорозі»</b>, товари зафіксовано — можна лише зняти клієнта з товару.</li>
+      <li>Тап по картці — <b>перегляд</b> (лише читання); кнопка <b>«Редагувати»</b> — зміни. Закрити вікно — кнопкою або подвійним тапом поза ним.</li>
+      <li>Замовлення <b>«Видано клієнту»</b> ідуть у згорнутий <b>архів</b> унизу списку.</li>
+    </ul>
+
+    <div ${H}>${ico('truck',15)} На відправку</div>
+    <p ${P}>Коли замовлення доходить до статусу <b>«Отримано»</b>, його товари з'являються тут, згруповані за клієнтом, готові до пакування.</p>
+    <ul ${UL}>
+      <li>Позначте товари галочками, тисніть <b>«Створити посилку»</b>, оберіть оператора й впишіть <b>ТТН</b> — він обов'язковий.</li>
+      <li>Для товарів без клієнта оберіть клієнта прямо у формі посилки — він проставиться і на самі товари.</li>
+      <li>У посилки свої етапи: Відправлено → В дорозі → Доставлено → Отримано клієнтом. Тап по бейджу просуває. Кнопка <b>«Трекінг»</b> відкриває сайт оператора за ТТН.</li>
+      <li>Коли клієнт отримав посилку, замовлення автоматично стає <b>«Видано клієнту»</b>. Отримані посилки ідуть в архів <b>«Доставлені»</b>.</li>
+    </ul>
+
+    <div ${H}>${ico('user',15)} Клієнти</div>
+    <ul ${UL}>
+      <li>Клієнт = ПІБ, нік, телефони, соцмережі (Instagram, TikTok, Threads, Facebook, Telegram) та адреси доставки (Нова Пошта, Укрпошта…).</li>
+      <li>Пошук згори дає миттєво знайти клієнта, коли прийшла його посилка.</li>
+      <li>Боржники — вгорі списку; на картці видно кількість замовлень і скільки клієнт ще винен.</li>
+    </ul>
+
+    <div ${H}>${ico('store',15)} Магазини</div>
+    <p ${P}>Ведіть сайти/магазини, де купуєте, окремими записами — на цьому будується розбивка доходу по магазинах у вкладці «Дохід».</p>
+
+    <div ${H}>${ico('tag',15)} Ціни</div>
+    <p ${P}>Список відстежуваних товарів. Кнопка <b>«Оновити ціни»</b> пробує підтягнути свіжі ціни онлайн (працює для багатьох магазинів, враховує знижки); де не вдалось — впишіть ціну вручну. Товари, де ціна <b>впала</b>, піднімаються вгору.</p>
+
+    <div ${H}>${ico('coins',15)} Дохід</div>
+    <ul ${UL}>
+      <li>Оберіть період (все / цей місяць / попередній) або власний діапазон дат.</li>
+      <li>Загальний оборот і прибуток у базовій валюті, графік прибутку по місяцях, розбивки по магазинах і клієнтах.</li>
+      <li><b>Отримано</b> й <b>Витрачено</b> показані по кожній валюті, з рядком <b>«Разом»</b> у базовій валюті.</li>
+      <li>Також видно, скільки клієнтів ще не оплатили й загальний борг.</li>
+    </ul>
+
+    <div ${H}>${ico('bank',15)} Дані (налаштування)</div>
+    <ul ${UL}>
+      <li><b>Базова валюта</b> й редаговані <b>курси</b>; кнопка <b>«Монобанк»</b> підтягує актуальні курси.</li>
+      <li><b>Експорт</b> зберігає файл-копію, <b>Імпорт</b> — відновлює з неї. Робіть копії регулярно — дані лежать лише на цьому пристрої.</li>
+      <li><b>«Відновити попередні дані»</b> повертає останній автоматичний знімок, якщо щось пішло не так.</li>
+      <li><b>Встановлення</b>: відкрийте додаток у браузері телефона → меню → «Додати на головний екран», і він працюватиме як звичайний застосунок, офлайн.</li>
+    </ul>
+
+    <p ${P} class="muted">Порада: додаток нікуди не надсилає ваші дані — тримайте копію (Експорт) у надійному місці (чат собі, пошта, хмара).</p>`;
+}
 function renderSettings(){
   const s=db.settings;
   document.getElementById('settingsView').innerHTML=`
+    <button class="btn" style="width:100%; margin-bottom:12px" onclick="openHelp()">${ico('book',16)} ${t('help')}</button>
     <div class="card">
       <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
       <select class="search" style="width:100%" id="set_base" onchange="changeBase(this.value)">
