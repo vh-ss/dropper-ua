@@ -1853,15 +1853,27 @@ function handleSwipe(dx,dy){
   if(dx<0 && i<TAB_ORDER.length-1) switchTab(TAB_ORDER[i+1]);   // swipe left → next tab
   else if(dx>0 && i>0) switchTab(TAB_ORDER[i-1]);               // swipe right → previous tab
 }
-let _swX=null,_swY=null;
+// true if the touch began inside a horizontally-scrollable area (chips row, chart…) —
+// there the horizontal drag is a scroll, not a tab swipe
+function startedInScrollX(el){
+  for(; el && el!==document.body; el=el.parentElement){
+    if(el.scrollWidth>el.clientWidth+2){
+      const ox=getComputedStyle(el).overflowX;
+      if(ox==='auto'||ox==='scroll') return true;
+    }
+  }
+  return false;
+}
+let _swX=null,_swY=null,_swSkip=false;
 document.addEventListener('touchstart',e=>{
   if(e.touches.length!==1){ _swX=null; return; }
   _swX=e.touches[0].clientX; _swY=e.touches[0].clientY;
+  _swSkip=startedInScrollX(e.target);
 },{passive:true});
 document.addEventListener('touchend',e=>{
   if(_swX===null) return;
   const tt=e.changedTouches[0];
-  handleSwipe(tt.clientX-_swX, tt.clientY-_swY);
+  if(!_swSkip) handleSwipe(tt.clientX-_swX, tt.clientY-_swY);
   _swX=null;
 },{passive:true});
 
