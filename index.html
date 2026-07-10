@@ -339,6 +339,7 @@ const I18N = {
     monoErr:"Не вдалось отримати курси (немає інтернету або ліміт 1 запит/хв). Спробуй за хвилину.",
     ratesUpdated:"Оновлено", monoLoading:"Завантаження курсів…",
     dataMgmt:"Дані", export:"Експорт у файл", import:"Імпорт з файлу", restoreData:"Відновити попередні дані", restoreConfirm:"Відновити дані з останнього автоматичного знімка? Поточні буде замінено.", restoreNone:"Немає знімка для відновлення",
+    saveFailed:"Не вдалось зберегти: сховище браузера переповнене. Зроби «Експорт у файл», потім прибери зайві фото товарів або старі замовлення.",
     clearAll:"Очистити всі дані", install:"Встановлення", help:"Довідка", helpTitle:"Як користуватись",
     installHint:"Відкрий цей файл у браузері телефона → меню → «Додати на головний екран».", versionWord:"версія",
     confirmDelOrder:"Видалити це замовлення?", confirmDelClient:"Видалити клієнта? Його замовлення залишаться без клієнта.",
@@ -412,6 +413,7 @@ const I18N = {
     monoErr:"Couldn't fetch rates (no internet or rate limit 1 req/min). Try in a minute.",
     ratesUpdated:"Updated", monoLoading:"Loading rates…",
     dataMgmt:"Data", export:"Export to file", import:"Import from file", restoreData:"Restore previous data", restoreConfirm:"Restore data from the last automatic snapshot? Current data will be replaced.", restoreNone:"No snapshot to restore",
+    saveFailed:"Couldn't save: browser storage is full. Do “Export to file”, then remove some item photos or old orders.",
     clearAll:"Clear all data", install:"Install", help:"Help / Guide", helpTitle:"How to use",
     installHint:"Open this file in your phone browser → menu → “Add to Home Screen”.", versionWord:"version",
     confirmDelOrder:"Delete this order?", confirmDelClient:"Delete client? Their orders stay without a client.",
@@ -546,11 +548,22 @@ function normalize(d){
 }
 function save(){
   if(DATA_ERROR) return; // never overwrite unreadable original data
+  const data=JSON.stringify(db);
+  let old=null; try{ old=localStorage.getItem(KEY); }catch(_){}
+  // 1) main data has PRIORITY — write it first; if quota hit, free recovery copies and retry
   try{
-    const prev=localStorage.getItem(KEY);
-    if(prev && prev!=='undefined') localStorage.setItem(KEY+'_prev', prev); // one-step recovery snapshot
-    localStorage.setItem(KEY, JSON.stringify(db));
-  }catch(e){ console.error('save failed', e); alert('Не вдалось зберегти (можливо, переповнено сховище браузера).'); }
+    localStorage.setItem(KEY, data);
+  }catch(e){
+    try{ localStorage.removeItem(KEY+'_prev'); }catch(_){}
+    try{ localStorage.removeItem(KEY+'_corrupt'); }catch(_){}
+    try{ localStorage.setItem(KEY, data); }
+    catch(e2){ console.error('save failed', e2); try{ alert(t('saveFailed')); }catch(_){ alert('Не вдалось зберегти: сховище переповнене.'); } return; }
+  }
+  // 2) one-step recovery snapshot of the PREVIOUS state — best-effort only, never blocks the real save
+  if(old && old!=='undefined' && old!==data){
+    try{ localStorage.setItem(KEY+'_prev', old); }
+    catch(_){ try{ localStorage.removeItem(KEY+'_prev'); }catch(__){} } // no room → skip snapshot, data is already saved
+  }
 }
 let _uidCounter=0;
 function uid(){ return Date.now().toString(36)+'-'+(_uidCounter++).toString(36)+Math.floor(performance.now()*1000%100000).toString(36); }
