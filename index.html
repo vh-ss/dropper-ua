@@ -151,6 +151,8 @@
   .chip b{color:inherit}
   .chip.warn{border-color:#5b2330; color:#fca5a5}
   .chip.warn.active{background:#b91c1c; border-color:#b91c1c; color:#fff}
+  .chip.good{border-color:#1e5631; color:#86efac}
+  .chip.good.active{background:#16a34a; border-color:#16a34a; color:#fff}
   /* status pill is tappable to advance */
   .pill.tap{cursor:pointer; user-select:none}
   /* monthly bar chart */
@@ -177,6 +179,8 @@
   html.light .btn.danger{background:#fee2e2; color:#b91c1c; border:1px solid #fecaca}
   html.light .chip.warn{border-color:#fecaca; color:#b91c1c}
   html.light .chip.warn.active{background:#dc2626; border-color:#dc2626; color:#fff}
+  html.light .chip.good{border-color:#bbf7d0; color:#15803d}
+  html.light .chip.good.active{background:#16a34a; border-color:#16a34a; color:#fff}
   html.light .theme-btn{background:rgba(255,255,255,.2)}
 </style>
 </head>
@@ -298,10 +302,11 @@ const I18N = {
     // order form
     newOrder:"Нове замовлення", editOrder:"Редагувати замовлення", viewOrder:"Замовлення",
     client:"Клієнт", chooseClient:"— оберіть клієнта —", newClientInline:"+ Новий", noClient:"Без клієнта",
-    removeClient:"Зняти клієнта", itemsLockedHint:"Замовлення в дорозі — товари зафіксовано, можна лише зняти клієнта",
+    removeClient:"Зняти клієнта", itemsLockedHint:"Замовлення в дорозі — товари зафіксовано. Можна відмічати оплату та зняти клієнта.",
     store:"Магазин / сайт", orderNo:"№ замовлення", purchaseDate:"Дата викупу",
     currency:"Валюта", status:"Статус", tracking:"Трек-номер", clientPaidQ:"Клієнт оплатив",
     paidAmountLabel:"Оплачено клієнтом", fullPay:"Повністю", remaining:"Залишок", partlyWord:"частково",
+    payments:"Оплати", payment:"Оплата", payTitle:"Прийняти оплату",
     items:"Товари", addItem:"+ Додати товар",
     title:"Назва товару", article:"Артикул", size:"Розмір", qty:"К-сть",
     cost:"Закупка", priceForClient:"Ціна клієнту", link:"Посилання", photo:"Фото",
@@ -376,10 +381,11 @@ const I18N = {
     autoDone:"Done. Updated: {u} · unchanged: {n} · failed: {f}",
     newOrder:"New order", editOrder:"Edit order", viewOrder:"Order",
     client:"Client", chooseClient:"— choose client —", newClientInline:"+ New", noClient:"No client",
-    removeClient:"Remove client", itemsLockedHint:"Order is in transit — items are locked, you can only remove the client",
+    removeClient:"Remove client", itemsLockedHint:"Order is in transit — items are locked. You can still record payment and remove the client.",
     store:"Store / site", orderNo:"Order №", purchaseDate:"Purchase date",
     currency:"Currency", status:"Status", tracking:"Tracking №", clientPaidQ:"Client paid",
     paidAmountLabel:"Paid by client", fullPay:"Full", remaining:"Remaining", partlyWord:"partial",
+    payments:"Payments", payment:"Payment", payTitle:"Record payment",
     items:"Items", addItem:"+ Add item",
     title:"Product title", article:"Article", size:"Size", qty:"Qty",
     cost:"Cost", priceForClient:"Client price", link:"Link", photo:"Photo",
@@ -571,7 +577,12 @@ function normalize(d){
       if(!it.priceCur) it.priceCur = o.currency || 'USD';
       if(it.clientId===undefined) it.clientId = o.clientId || null; // client moved to item level
       if(it.paid===undefined)     it.paid     = !!o.clientPaid;     // legacy flag
-      if(it.paidAmount===undefined) it.paidAmount = it.paid ? (Number(it.priceForClient)||0)*(Number(it.qty)||1) : 0; // partial-payment amount
+      if(it.paidAmount===undefined) it.paidAmount = it.paid ? (Number(it.priceForClient)||0)*(Number(it.qty)||1) : 0; // legacy single amount
+      if(!Array.isArray(it.payments)){ // migrate single paidAmount → payment history [{d,a}]
+        const pa=Number(it.paidAmount)||0;
+        it.payments = pa>0 ? [{d:o.purchaseDate||'', a:pa}] : [];
+      }
+      it.paidAmount = it.payments.reduce((s,p)=>s+(Number(p.a)||0),0); // keep cache in sync
       return it;
     });
     return o;
@@ -644,9 +655,11 @@ function orderClientsLabel(o){
   if(!names.length) return t('unknownClient');
   return names.length<=2 ? names.join(', ') : names.slice(0,2).join(', ')+' +'+(names.length-2);
 }
-// Partial payments: each item tracks paidAmount (in its priceCur). Helpers below.
+// Partial payments: each item keeps a history it.payments=[{d,a}] (amounts in its priceCur); paidAmount is the cached sum.
 function itemSaleNative(it){ return (Number(it.priceForClient)||0)*itemQty(it); }      // total due, in priceCur
-function itemPaidNative(it){ const s=itemSaleNative(it); let p=Number(it.paidAmount)||0; return p<0?0:(p>s?s:p); }
+function itemPaidNative(it){ const s=itemSaleNative(it);
+  let p = Array.isArray(it.payments) ? it.payments.reduce((a,x)=>a+(Number(x.a)||0),0) : (Number(it.paidAmount)||0);
+  return p<0?0:(p>s?s:p); }
 function itemUnpaidBase(it,rates){ return toBase(itemSaleNative(it)-itemPaidNative(it), it.priceCur||db.settings.base, rates); }
 function itemPaidState(it){ const s=itemSaleNative(it), p=itemPaidNative(it);
   if(s<=0) return 'none'; if(p>=s-0.001) return 'all'; if(p>0.001) return 'partial'; return 'none'; }
@@ -721,19 +734,22 @@ function renderAll(){
 }
 
 /* ============ ORDERS ============ */
-let orderFilter='all'; // 'all' | '0'..'4' (status) | 'unpaid'
-function orderMatchesFilter(o){
-  if(orderFilter==='all') return true;
-  if(orderFilter==='unpaid') return orderPaidState(o)!=='all';
-  return o.status===parseInt(orderFilter);
+let orderFilter='all'; // 'all' | '0'..'4' (status) | 'unpaid' | 'paid'
+function orderMatchesFilterVal(o,v){
+  if(v==='all') return true;
+  if(v==='unpaid') return orderPaidState(o)!=='all';
+  if(v==='paid') return orderPaidState(o)==='all';
+  return o.status===parseInt(v);
 }
+function orderMatchesFilter(o){ return orderMatchesFilterVal(o,orderFilter); }
 function renderOrderChips(){
   const wrap=document.getElementById('orderChips');
-  const cnt=v=>db.orders.filter(o=>{ if(v==='all')return true; if(v==='unpaid')return orderPaidState(o)!=='all'; return o.status===parseInt(v); }).length;
-  const chip=(v,label,warn)=>`<button class="chip${warn?' warn':''}${orderFilter===v?' active':''}" onclick="orderFilter='${v}';renderOrders()">${esc(label)} <b>${cnt(v)}</b></button>`;
+  const cnt=v=>db.orders.filter(o=>orderMatchesFilterVal(o,v)).length;
+  const chip=(v,label,cls)=>`<button class="chip${cls?' '+cls:''}${orderFilter===v?' active':''}" onclick="orderFilter='${v}';renderOrders()">${esc(label)} <b>${cnt(v)}</b></button>`;
   wrap.innerHTML = chip('all',t('queueAll'))
     + t('st').map((s,i)=>chip(String(i),s)).join('')
-    + chip('unpaid',t('unpaid'),true);
+    + chip('paid',t('paid'),'good')
+    + chip('unpaid',t('unpaid'),'warn');
 }
 function orderCard(o){
   const base=db.settings.base;
@@ -757,7 +773,7 @@ function orderCard(o){
           <span class="big">${money(orderTotal(o),base)}</span> <span class="muted" style="font-size:12px">${t('salesWord')}</span>
           <div class="sub">${t('cost')}: ${money(orderCost(o),base)} · <span class="${prof>=0?'profit':'loss'}">${t('profitWord')} ${prof>=0?'+':''}${money(prof,base)}</span></div>
         </div>
-        <span class="pill ${pillCls}">${pillTxt}</span>
+        <span class="pill ${pillCls} tap" onclick="event.stopPropagation();openPayment('${o.id}')" title="${esc(t('payTitle'))}">${pillTxt}</span>
       </div>
       ${thumbs?`<div class="thumbs">${thumbs}</div>`:''}
       <div class="sub" style="margin-top:6px">${(o.items||[]).map(i=>esc(i.title||t('noName'))+(i.size?' ('+esc(i.size)+')':'')).join(' · ')}</div>
@@ -851,6 +867,7 @@ function viewOrder(id){
 
     <div class="sheet-actions">
       <button class="btn sec" onclick="closeSheet()">${t('close')}</button>
+      <button class="btn sec" onclick="openPayment('${o.id}')">${ico('coins',16)} ${t('payment')}</button>
       <button class="btn" onclick="openOrder('${o.id}')">${ico('edit',16)} ${t('edit')}</button>
     </div>`;
   openSheet();
@@ -947,13 +964,7 @@ function itemExpanded(it,idx,base){
       <div class="field"><label>${t('priceForClient')}</label>
         <div class="linkrow"><input type="number" step="0.01" value="${esc(it.priceForClient)}" oninput="updItem(${idx},'priceForClient',this.value)" style="flex:1; min-width:0">${curSelect(idx,'priceCur',it.priceCur||base)}</div></div>
       <div class="sub" id="itemprof_${idx}" style="text-align:right; margin-top:2px">${has?`${t('orderProfit')}: <b class="${profB>=0?'profit':'loss'}">${money(profB,base)}</b>`:''}</div>
-      <div class="field"><label>${t('paidAmountLabel')} (${it.priceCur||base})</label>
-        <div class="linkrow">
-          <input type="number" step="0.01" value="${esc(it.paidAmount||'')}" oninput="updItem(${idx},'paidAmount',this.value)" placeholder="0" style="flex:1; min-width:0">
-          <button class="btn sm sec" onclick="markFullPaid(${idx})">${t('fullPay')}</button>
-        </div>
-        <div class="sub" id="remain_${idx}" style="margin-top:3px">${itemPayHint(it)}</div>
-      </div>
+      <div class="field"><div id="pay_${idx}">${payInner(idx)}</div></div>
       <div class="field"><label>${t('link')}</label><input value="${esc(it.link)}" oninput="updItem(${idx},'link',this.value)"></div>
       <div class="field"><label>${t('photo')}</label>
         <div class="linkrow">
@@ -966,7 +977,7 @@ function itemExpanded(it,idx,base){
       </div>
     </div>`;
 }
-function itemLocked(it,idx,base){ // read-only card for an in-transit order; only "remove client" is allowed
+function itemLocked(it,idx,base){ // in-transit order: goods are frozen, but PAYMENT stays editable (money ≠ goods) + "remove client"
   const has=(it.cost||it.priceForClient), cl=it.clientId?clientById(it.clientId):null;
   return `<div class="itemcard">
     <div class="row" style="align-items:flex-start; gap:8px">
@@ -978,6 +989,7 @@ function itemLocked(it,idx,base){ // read-only card for an in-transit order; onl
       </div>
       ${cl?`<button class="btn sm danger" style="flex:0 0 auto" onclick="unassignItemClient(${idx})">${t('removeClient')}</button>`:''}
     </div>
+    <div class="field" style="margin:10px 0 0"><div id="pay_${idx}">${payInner(idx)}</div></div>
   </div>`;
 }
 function unassignItemClient(idx){ editingOrderItems[idx].clientId=null; renderItemEditors(); }
@@ -997,7 +1009,80 @@ function itemPayHint(it){ // "Залишок: X" / "Оплачено повні�
 }
 function itemPaidBadge(it){ const s=itemPaidState(it);
   if(s==='all') return '<span class="profit" style="display:inline-flex">'+ico('check',14)+'</span>'; if(s==='partial') return '<span class="pill st0" style="padding:1px 6px">'+t('partlyWord')+'</span>'; return ''; }
-function markFullPaid(idx){ editingOrderItems[idx].paidAmount=itemSaleNative(editingOrderItems[idx]); renderItemEditors(); }
+/* ---- payment history editor (used in item edit form, locked item, and quick-pay sheet) ---- */
+function payHintHtml(idx){
+  const it=editingOrderItems[idx], cur=it.priceCur||db.settings.base;
+  const due=itemSaleNative(it), paid=itemPaidNative(it), rem=due-paid;
+  const state = rem<=0.001 ? '<span class="profit">'+ico('check',13)+' '+t('paid')+'</span>'
+                           : '<b>'+t('remaining')+': '+money(rem,cur)+'</b>'+(paid>0.001?' · '+t('partlyWord'):'');
+  return state+' <span class="muted">· '+money(paid,cur)+' / '+money(due,cur)+'</span>';
+}
+function payInner(idx){
+  const it=editingOrderItems[idx], cur=it.priceCur||db.settings.base;
+  const rows=(it.payments||[]).map((p,pi)=>`
+    <div class="linkrow" style="margin-bottom:6px">
+      <input type="date" value="${esc(p.d||'')}" onchange="updPayment(${idx},${pi},'d',this.value)" style="flex:0 0 auto; background:var(--card); border:1px solid var(--border); color:var(--text); padding:9px 8px; border-radius:10px; font-size:13px">
+      <input type="number" step="0.01" value="${esc(p.a)}" oninput="updPayment(${idx},${pi},'a',this.value)" placeholder="0" style="flex:1; min-width:0; background:var(--card); border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px">
+      <button class="btn sm danger" onclick="rmPayment(${idx},${pi})">${ico('x',14)}</button>
+    </div>`).join('');
+  const rem=itemSaleNative(it)-itemPaidNative(it);
+  return `<label style="display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:600">${t('payments')} (${cur})</label>
+    ${rows}
+    <div class="linkrow" style="margin-top:2px">
+      <button class="btn sm sec" onclick="addPayment(${idx})">+ ${t('payment')}</button>
+      ${rem>0.001?`<button class="btn sm sec" onclick="markFullPaid(${idx})">${t('fullPay')}</button>`:''}
+    </div>
+    <div class="sub" id="payhint_${idx}" style="margin-top:6px">${payHintHtml(idx)}</div>`;
+}
+function renderPayBlock(idx){ const el=document.getElementById('pay_'+idx); if(el) el.innerHTML=payInner(idx); }
+function addPayment(idx){ const it=editingOrderItems[idx]; it.payments=it.payments||[];
+  const rem=itemSaleNative(it)-itemPaidNative(it);
+  it.payments.push({d:todayISO(), a: rem>0.001?+rem.toFixed(2):0}); renderPayBlock(idx); }
+function rmPayment(idx,pi){ editingOrderItems[idx].payments.splice(pi,1); renderPayBlock(idx); }
+function updPayment(idx,pi,f,v){ const it=editingOrderItems[idx]; if(!it.payments||!it.payments[pi])return;
+  it.payments[pi][f]=v;
+  if(f==='a'){ const el=document.getElementById('payhint_'+idx); if(el) el.innerHTML=payHintHtml(idx); } // live remaining, keep focus
+  else renderPayBlock(idx);
+}
+function markFullPaid(idx){ const it=editingOrderItems[idx]; const rem=itemSaleNative(it)-itemPaidNative(it);
+  if(rem>0.001){ it.payments=it.payments||[]; it.payments.push({d:todayISO(), a:+rem.toFixed(2)}); }
+  renderPayBlock(idx); }
+/* ---- quick-pay sheet: record payments without opening the full edit form ---- */
+let payOrderId=null;
+function openPayment(id){
+  const o=db.orders.find(x=>x.id===id); if(!o) return;
+  payOrderId=id;
+  editingOrderItems=JSON.parse(JSON.stringify(o.items||[]));
+  editingOrderItems.forEach(it=>{ it.payments=it.payments||[]; });
+  const base=db.settings.base;
+  const rows=editingOrderItems.map((it,idx)=>{
+    const cl=it.clientId?clientById(it.clientId):null;
+    return `<div class="itemcard">
+      <div style="min-width:0">
+        <b>${esc(it.title||t('noName'))}</b>${it.size?` <span class="muted">(${esc(it.size)})</span>`:''}
+        <div class="sub">${ico('user',14)} ${cl?esc(clientLabel(cl)):t('noClient')} · ${money(Number(it.priceForClient)||0,it.priceCur||base)}</div>
+      </div>
+      <div id="pay_${idx}" style="margin-top:8px">${payInner(idx)}</div>
+    </div>`;
+  }).join('') || `<div class="muted">—</div>`;
+  document.getElementById('sheet').innerHTML=`
+    <h2>${t('payTitle')}</h2>
+    <div class="sub" style="margin:-6px 0 12px">${esc(storeName(o))} ${o.orderNumber?'#'+esc(o.orderNumber):''}</div>
+    ${rows}
+    <div class="sheet-actions">
+      <button class="btn sec" onclick="closeSheet()">${t('close')}</button>
+      <button class="btn" onclick="savePayments()">${t('save')}</button>
+    </div>`;
+  openSheet();
+}
+function savePayments(){
+  const o=db.orders.find(x=>x.id===payOrderId); if(!o){ closeSheet(); return; }
+  editingOrderItems.forEach(ei=>{ const it=(o.items||[]).find(x=>x.id===ei.id); if(!it) return;
+    it.payments=(ei.payments||[]).map(p=>({d:p.d||'', a:Math.max(0,Number(p.a)||0)})).filter(p=>p.a>0);
+    it.paidAmount=it.payments.reduce((s,p)=>s+p.a,0);
+  });
+  save(); closeSheet(); renderOrders();
+}
 function updItem(idx,key,val){
   editingOrderItems[idx][key]=val;
   if(key==='costCur'||key==='priceCur'){ renderItemEditors(); return; }  // discrete change → full re-render
@@ -1082,7 +1167,9 @@ function saveOrder(id){
       qty:Number(i.qty)||1,
       cost:Number(i.cost)||0, costCur:i.costCur||'USD',
       priceForClient:Number(i.priceForClient)||0, priceCur:i.priceCur||db.settings.base,
-      clientId:i.clientId||null, paidAmount:Math.max(0,Number(i.paidAmount)||0),
+      clientId:i.clientId||null,
+      payments:(i.payments||[]).map(p=>({d:p.d||'', a:Math.max(0,Number(p.a)||0)})).filter(p=>p.a>0),
+      paidAmount:(i.payments||[]).reduce((s,p)=>s+Math.max(0,Number(p.a)||0),0), // cached sum
       link:i.link, photo:i.photo||''
     }))
   };
