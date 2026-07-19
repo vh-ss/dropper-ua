@@ -278,6 +278,8 @@ const I18N = {
     appTitle:"Облік викупів", navOrders:"Замовлення", navShip:"На відправку", navClients:"Клієнти", navStores:"Магазини", navWatches:"Ціни",
     navIncome:"Дохід", navSettings:"Дані",
     parcelsTitle:"Посилки", toPackTitle:"Готові до відправки", emptyShip:"Немає товарів до відправки",
+    npRefresh:"Оновити статуси з Нової Пошти", npLoading:"Оновлення з НП…", npUpdated:"Оновлено посилок: ",
+    npNone:"Немає активних посилок Нової Пошти з ТТН", npNoChange:"Статуси без змін", npNetErr:"Не вдалось звʼязатися з Новою Поштою",
     createParcel:"Створити посилку", newParcel:"Нова посилка", editParcel:"Посилка", carrier:"Поштовий оператор",
     ttn:"ТТН (номер накладної)", track:"Трекінг", shipped:"Відправлено", itemsWord:"шт.",
     parcelSt:["Відправлено","В дорозі","Доставлено","Отримано клієнтом"], deliveredTitle:"Доставлені",
@@ -358,6 +360,8 @@ const I18N = {
     appTitle:"Buyer Tracker", navOrders:"Orders", navShip:"To ship", navClients:"Clients", navStores:"Stores", navWatches:"Prices",
     navIncome:"Income", navSettings:"Data",
     parcelsTitle:"Parcels", toPackTitle:"Ready to ship", emptyShip:"Nothing to ship",
+    npRefresh:"Update statuses from Nova Poshta", npLoading:"Updating from NP…", npUpdated:"Parcels updated: ",
+    npNone:"No active Nova Poshta parcels with a tracking №", npNoChange:"Statuses unchanged", npNetErr:"Couldn't reach Nova Poshta",
     createParcel:"Create parcel", newParcel:"New parcel", editParcel:"Parcel", carrier:"Carrier",
     ttn:"Tracking № (waybill)", track:"Track", shipped:"Shipped", itemsWord:"pcs",
     parcelSt:["Shipped","In transit","Delivered","Received by client"], deliveredTitle:"Delivered",
@@ -1197,6 +1201,26 @@ function syncOrderStatuses(){
 }
 function setParcelStatus(id){ const p=(db.parcels||[]).find(x=>x.id===id); if(!p)return;
   p.status=((p.status||0)+1)%4; syncOrderStatuses(); save(); renderShip(); renderOrders(); } // tap to advance the parcel state
+// Nova Poshta StatusCode → parcel stage (0 Відправлено · 1 В дорозі · 2 Доставлено · 3 Отримано клієнтом).
+// Only advances forward; setting stage 3 triggers the existing syncOrderStatuses cascade (order → Видано).
+const NP_STAGE={'1':0, '4':1,'41':1,'5':1,'6':1,'101':1, '7':2,'8':2, '9':3,'10':3,'11':3,'106':3};
+async function refreshNPStatuses(){
+  const active=(db.parcels||[]).filter(p=>p.carrier==='novaposhta' && p.ttn && (p.status||0)<3);
+  if(!active.length){ alert(t('npNone')); return; }
+  const btn=document.getElementById('npBtn'); if(btn){ btn.disabled=true; btn.innerHTML=ico('refresh',16)+' '+t('npLoading'); }
+  try{
+    const res=await fetch('https://api.novaposhta.ua/v2.0/json/',{ method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({apiKey:'', modelName:'TrackingDocument', calledMethod:'getStatusDocuments',
+        methodProperties:{Documents:active.map(p=>({DocumentNumber:p.ttn, Phone:''}))}}) });
+    const j=await res.json();
+    const byTtn={}; (j.data||[]).forEach(d=>{ byTtn[String(d.Number)]=String(d.StatusCode); });
+    let changed=0;
+    active.forEach(p=>{ const stage=NP_STAGE[byTtn[String(p.ttn)]]; if(stage!==undefined && stage>(p.status||0)){ p.status=stage; changed++; } });
+    if(changed){ syncOrderStatuses(); save(); renderShip(); renderOrders(); alert(t('npUpdated')+changed); }
+    else alert(t('npNoChange'));
+  }catch(e){ console.error('NP', e); alert(t('npNetErr')); }
+  finally{ const b=document.getElementById('npBtn'); if(b){ b.disabled=false; b.innerHTML=ico('refresh',16)+' '+t('npRefresh'); } }
+}
 let showDelivered=false;
 function toggleDelivered(){ showDelivered=!showDelivered; renderShip(); }
 function parcelCard(p){
@@ -1225,6 +1249,9 @@ function renderShip(){
   let html='';
   const parcels=(db.parcels||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const active=parcels.filter(p=>(p.status||0)<3), done=parcels.filter(p=>(p.status||0)>=3);
+  // "refresh from Nova Poshta" — only when there's at least one active NP parcel with a TTN
+  const hasNP=active.some(p=>p.carrier==='novaposhta' && p.ttn);
+  if(hasNP){ html+=`<button class="btn sec" id="npBtn" style="width:100%; margin-bottom:10px" onclick="refreshNPStatuses()">${ico('refresh',16)} ${t('npRefresh')}</button>`; }
   // active parcels (not yet received by client)
   if(active.length){
     html+=`<div class="muted" style="margin:4px 0 8px">${t('parcelsTitle')} (${active.length})</div>`;
