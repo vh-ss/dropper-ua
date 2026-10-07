@@ -347,6 +347,11 @@ const I18N = {
     ratesUpdated:"Оновлено", monoLoading:"Завантаження курсів…",
     dataMgmt:"Дані", export:"Експорт у файл", import:"Імпорт з файлу", restoreData:"Відновити попередні дані", restoreConfirm:"Відновити дані з останнього автоматичного знімка? Поточні буде замінено.", restoreNone:"Немає знімка для відновлення",
     saveFailed:"Не вдалось зберегти: сховище браузера переповнене. Зроби «Експорт у файл», потім прибери зайві фото товарів або старі замовлення.",
+    driveConnect:"Підключити Google Drive", driveDisconnect:"Відключити", driveSyncNow:"Синхронізувати зараз",
+    driveOff:"Вимкнено — дані лише на цьому пристрої", driveOnIdle:"Підключено ✓ дані зберігаються у твій Google Drive",
+    driveSyncing:"Синхронізація…", driveErrorS:"Помилка синхронізації", driveOffline:"Немає мережі", driveDone:"Синхронізовано",
+    driveNeedLogin:"Потрібно увійти в Google", driveUnavailable:"Синхронізація доступна лише в онлайн-версії (vh-ss.github.io)",
+    driveHint:"Підключи раз — і дані переживуть чистку кешу й зміну пристрою. Якщо застосунок порожній — підключи Drive, щоб відновити.",
     clearAll:"Очистити всі дані", install:"Встановлення", help:"Довідка", helpTitle:"Як користуватись",
     installHint:"Відкрий цей файл у браузері телефона → меню → «Додати на головний екран».", versionWord:"версія",
     confirmDelOrder:"Видалити це замовлення?", confirmDelClient:"Видалити клієнта? Його замовлення залишаться без клієнта.",
@@ -424,6 +429,11 @@ const I18N = {
     ratesUpdated:"Updated", monoLoading:"Loading rates…",
     dataMgmt:"Data", export:"Export to file", import:"Import from file", restoreData:"Restore previous data", restoreConfirm:"Restore data from the last automatic snapshot? Current data will be replaced.", restoreNone:"No snapshot to restore",
     saveFailed:"Couldn't save: browser storage is full. Do “Export to file”, then remove some item photos or old orders.",
+    driveConnect:"Connect Google Drive", driveDisconnect:"Disconnect", driveSyncNow:"Sync now",
+    driveOff:"Off — data only on this device", driveOnIdle:"Connected ✓ data saved to your Google Drive",
+    driveSyncing:"Syncing…", driveErrorS:"Sync error", driveOffline:"Offline", driveDone:"Synced",
+    driveNeedLogin:"Google sign-in needed", driveUnavailable:"Sync only works in the online version (vh-ss.github.io)",
+    driveHint:"Connect once — your data survives cache clears and device changes. If the app is empty, connect Drive to restore.",
     clearAll:"Clear all data", install:"Install", help:"Help / Guide", helpTitle:"How to use",
     installHint:"Open this file in your phone browser → menu → “Add to Home Screen”.", versionWord:"version",
     confirmDelOrder:"Delete this order?", confirmDelClient:"Delete client? Their orders stay without a client.",
@@ -607,7 +617,7 @@ function normalize(d){
   d.settings.rates=Object.assign({USD:1,EUR:1.08,GBP:1.27,PLN:0.25,UAH:0.024}, d.settings.rates||{});
   return d;
 }
-function save(){
+function save(fromSync){
   if(DATA_ERROR) return; // never overwrite unreadable original data
   const data=JSON.stringify(db);
   let old=null; try{ old=localStorage.getItem(KEY); }catch(_){}
@@ -625,6 +635,8 @@ function save(){
     try{ localStorage.setItem(KEY+'_prev', old); }
     catch(_){ try{ localStorage.removeItem(KEY+'_prev'); }catch(__){} } // no room → skip snapshot, data is already saved
   }
+  // 3) mark change time + queue a Google Drive push (skipped when the write itself came FROM a sync pull)
+  if(!fromSync){ try{ localStorage.setItem('dropper.savedAt', String(Date.now())); }catch(_){} if(typeof cloudOnLocalChange==='function') cloudOnLocalChange(); }
 }
 let _uidCounter=0;
 function uid(){ return Date.now().toString(36)+'-'+(_uidCounter++).toString(36)+Math.floor(performance.now()*1000%100000).toString(36); }
@@ -1901,6 +1913,15 @@ function renderSettings(){
   document.getElementById('settingsView').innerHTML=`
     <a class="btn" href="./Інструкція-користувача.html" target="_blank" rel="noopener" style="width:100%; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:6px; text-decoration:none">${ico('book',16)} ${t('help')}</a>
     <div class="card">
+      <div class="muted" style="margin-bottom:6px">${ico('bank',16)} Google Drive</div>
+      <div class="sub" id="driveStatus" style="margin-bottom:10px">${driveStatusText()}</div>
+      ${Sync.on
+        ? `<button class="btn sec" style="width:100%; margin-bottom:8px" onclick="cloudSync(true)">${ico('refresh',16)} ${t('driveSyncNow')}</button>
+           <button class="btn sec" style="width:100%" onclick="driveDisconnect()">${t('driveDisconnect')}</button>`
+        : `<button class="btn" style="width:100%" onclick="driveConnect()">${ico('up',16)} ${t('driveConnect')}</button>`}
+      <div class="sub" style="margin-top:8px">${t('driveHint')}</div>
+    </div>
+    <div class="card">
       <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
       <select class="search" style="width:100%" id="set_base" onchange="changeBase(this.value)">
         ${CURRENCIES.map(c=>`<option ${s.base===c?'selected':''}>${c}</option>`).join('')}
@@ -2065,6 +2086,79 @@ document.addEventListener('touchend',e=>{
   const a=document.createElement('link'); a.rel='apple-touch-icon'; a.href=href; document.head.appendChild(a);
 })();
 
+/* ============ Google Drive sync — durable storage that survives cache clears & device changes ============
+   Stores one file `dropperua-data.json` in the app's private Drive appDataFolder (invisible in normal Drive).
+   Same OAuth client as MoneyMe — works because both are served from the same origin (vh-ss.github.io). */
+const GCLIENT_ID='934338930225-arnhi5r45ptk1japnogvjqguob4q5mnv.apps.googleusercontent.com';
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_FILE='dropperua-data.json';
+const GIS_SRC='https://accounts.google.com/gsi/client';
+const TOK_KEY='dropper.sync.token';
+const Sync={ on:(()=>{try{return localStorage.getItem('dropper.sync.on')==='1';}catch(_){return false;}})(), token:null, fileId:null, status:'off', tokenClient:null, pushTimer:null, busy:false, gisLoading:null, _res:null, _rej:null };
+function syncClientId(){ try{ return (GCLIENT_ID||localStorage.getItem('dropper.sync.clientId')||'').trim(); }catch(_){ return GCLIENT_ID; } }
+function syncAvailable(){ return location.protocol.indexOf('http')===0 && !!syncClientId(); }
+function localSavedAt(){ try{ return Number(localStorage.getItem('dropper.savedAt'))||0; }catch(_){ return 0; } }
+function dbIsEmpty(){ return !((db.orders||[]).length||(db.clients||[]).length||(db.stores||[]).length||(db.watches||[]).length); }
+function remoteHasData(r){ return !!(r&&r.db&&((r.db.orders||[]).length||(r.db.clients||[]).length)); }
+function loadGIS(){ if(window.google&&google.accounts&&google.accounts.oauth2) return Promise.resolve();
+  if(Sync.gisLoading) return Sync.gisLoading;
+  Sync.gisLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=GIS_SRC; s.async=true; s.defer=true; s.onload=res; s.onerror=()=>rej(new Error('GIS load failed')); document.head.appendChild(s); });
+  return Sync.gisLoading; }
+function getCachedToken(){ if(Sync.token && Sync.token.exp-Date.now()>60000) return Sync.token.access_token;
+  try{ const tk=JSON.parse(localStorage.getItem(TOK_KEY)||'null'); if(tk && tk.exp-Date.now()>60000){ Sync.token=tk; return tk.access_token; } }catch(_){}
+  return null; }
+function saveToken(resp){ Sync.token={access_token:resp.access_token, exp:Date.now()+((resp.expires_in||3300)*1000)}; try{ localStorage.setItem(TOK_KEY, JSON.stringify(Sync.token)); }catch(_){} }
+function ensureTokenClient(){ if(Sync.tokenClient) return;
+  Sync.tokenClient=google.accounts.oauth2.initTokenClient({ client_id:syncClientId(), scope:DRIVE_SCOPE,
+    callback:(resp)=>{ if(resp&&resp.access_token){ saveToken(resp); if(Sync._res){Sync._res(Sync.token.access_token);Sync._res=Sync._rej=null;} } else if(Sync._rej){Sync._rej(new Error('no access'));Sync._res=Sync._rej=null;} },
+    error_callback:(e)=>{ if(Sync._rej){Sync._rej(new Error((e&&e.type)||'auth error'));Sync._res=Sync._rej=null;} } }); }
+function acquireToken(prompt){ return loadGIS().then(()=>{ ensureTokenClient(); return new Promise((res,rej)=>{ Sync._res=res; Sync._rej=rej;
+  try{ Sync.tokenClient.requestAccessToken({prompt:prompt||''}); }catch(e){ Sync._res=Sync._rej=null; rej(e); } }); }); }
+function getToken(interactive){ const c=getCachedToken(); if(c) return Promise.resolve(c); if(!interactive) return Promise.reject(new Error('need auth')); return acquireToken(interactive==='consent'?'consent':''); }
+async function driveFetch(url,opts){ const tok=await getToken(false); const o=Object.assign({},opts||{}); o.headers=Object.assign({},o.headers,{Authorization:'Bearer '+tok});
+  let r=await fetch(url,o); if(r.status===401){ Sync.token=null; try{localStorage.removeItem(TOK_KEY);}catch(_){}; const t2=await getToken(true); o.headers.Authorization='Bearer '+t2; r=await fetch(url,o); } return r; }
+async function driveFind(){ const q=encodeURIComponent("name='"+DRIVE_FILE+"'"); const r=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id)&q='+q); if(!r.ok) throw new Error('list '+r.status); const j=await r.json(); return (j.files&&j.files[0])||null; }
+async function driveDownload(id){ const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media'); if(!r.ok) throw new Error('get '+r.status); return r.json(); }
+async function driveUpload(id,payload){ const body=JSON.stringify(payload);
+  if(id){ const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'application/json'},body}); if(!r.ok) throw new Error('upd '+r.status); return id; }
+  const bnd='dp'+Math.random().toString(16).slice(2); const meta={name:DRIVE_FILE,parents:['appDataFolder']};
+  const mp='--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bnd+'\r\nContent-Type: application/json\r\n\r\n'+body+'\r\n--'+bnd+'--';
+  const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:mp}); if(!r.ok) throw new Error('create '+r.status); return (await r.json()).id; }
+function driveStatusText(){ if(!Sync.on) return t('driveOff');
+  switch(Sync.status){ case 'syncing':return t('driveSyncing'); case 'error':return t('driveErrorS'); case 'offline':return t('driveOffline'); default:return t('driveOnIdle'); } }
+function setSyncStatus(s){ Sync.status=s; const el=document.getElementById('driveStatus'); if(el) el.textContent=driveStatusText();
+  const st=document.getElementById('tab-settings'); if(st&&st.classList.contains('active')) renderSettings(); }
+function cloudOnLocalChange(){ if(!Sync.on||!syncAvailable()) return; clearTimeout(Sync.pushTimer);
+  Sync.pushTimer=setTimeout(()=>{ if(Sync.on&&syncAvailable()&&navigator.onLine) cloudSync(false); }, 2500); }
+// Core sync. Last-write-wins by savedAt, with a HARD guard: empty local NEVER overwrites good cloud data,
+// and empty local + good cloud data → PULL (auto-restore after a cache clear).
+async function cloudSync(interactive){
+  if(!syncAvailable()){ if(interactive) alert(t('driveUnavailable')); return; }
+  if(!navigator.onLine){ setSyncStatus('offline'); if(interactive) alert(t('driveOffline')); return; }
+  if(Sync.busy) return; Sync.busy=true; setSyncStatus('syncing');
+  try{
+    try{ await getToken(interactive?'consent':false); }
+    catch(e){ setSyncStatus(Sync.on?'error':'off'); if(interactive) alert(t('driveNeedLogin')); return; }
+    const f=await driveFind(); Sync.fileId=f?f.id:null;
+    const remote=f?await driveDownload(f.id).catch(()=>null):null;
+    const rSaved=(remote&&remote.savedAt)||0, lSaved=localSavedAt();
+    if(remote && remoteHasData(remote) && (rSaved>lSaved || dbIsEmpty())){
+      db=normalize(remote.db); migratePhotos(); save(true); try{ localStorage.setItem('dropper.savedAt', String(rSaved)); }catch(_){}
+      applyStaticTexts(); renderAll(); setSyncStatus('idle'); if(interactive) alert(t('driveDone')); return; // PULL / restore
+    }
+    if(dbIsEmpty() && remoteHasData(remote)){ setSyncStatus('idle'); return; } // safety: never push empty over cloud data
+    const ts=lSaved||Date.now();
+    Sync.fileId=await driveUpload(Sync.fileId, {v:1, app:'dropperua', savedAt:ts, db:dbWithInlinePhotos()}); // PUSH
+    try{ localStorage.setItem('dropper.savedAt', String(ts)); }catch(_){}
+    setSyncStatus('idle'); if(interactive) alert(t('driveDone'));
+  }catch(e){ console.error('sync', e); setSyncStatus('error'); if(interactive) alert(t('driveErrorS')); }
+  finally{ Sync.busy=false; }
+}
+async function driveConnect(){ Sync.on=true; try{ localStorage.setItem('dropper.sync.on','1'); }catch(_){} await cloudSync(true); renderSettings(); }
+function driveDisconnect(){ if(Sync.token && window.google&&google.accounts){ try{ google.accounts.oauth2.revoke(Sync.token.access_token,function(){}); }catch(_){} }
+  Sync.on=false; Sync.token=null; Sync.fileId=null; try{ localStorage.removeItem('dropper.sync.on'); localStorage.removeItem(TOK_KEY); }catch(_){}
+  setSyncStatus('off'); renderSettings(); }
+
 /* ============ boot ============ */
 (async function boot(){
   try{ PHOTOS=await idbAll(); }catch(_){ PHOTOS={}; } // load photos from IndexedDB first
@@ -2074,6 +2168,11 @@ document.addEventListener('touchend',e=>{
   applyTheme();
   applyStaticTexts();
   renderOrders();
+  // Drive: pull on start (auto-restores if local is empty); keep in sync on reconnect/return/online
+  if(Sync.on && syncAvailable()){ setSyncStatus('idle'); cloudSync(false); }
+  window.addEventListener('online', ()=>{ if(Sync.on&&syncAvailable()) cloudSync(false); });
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && Sync.on && syncAvailable() && navigator.onLine) cloudSync(false); });
+  setInterval(()=>{ if(Sync.on&&syncAvailable()&&navigator.onLine&&!document.hidden) cloudSync(false); }, 120*1000);
 })();
 
 /* ============ PWA: service worker + "нова версія" плашка (лише на http/https) ============ */
