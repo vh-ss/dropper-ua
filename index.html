@@ -352,6 +352,7 @@ const I18N = {
     driveSyncing:"Синхронізація…", driveErrorS:"Помилка синхронізації", driveOffline:"Немає мережі", driveDone:"Синхронізовано",
     driveNeedLogin:"Потрібно увійти в Google", driveUnavailable:"Синхронізація доступна лише в онлайн-версії (vh-ss.github.io)",
     driveHint:"Підключи раз — і дані переживуть чистку кешу й зміну пристрою. Якщо застосунок порожній — підключи Drive, щоб відновити.",
+    driveOwnId:"Власний Google Client ID", driveOwnIdHint:"Створи окремий OAuth-клієнт для цього додатка і встав ID сюди (для постійного використання краще зашити в код — скажи мені ID).",
     clearAll:"Очистити всі дані", install:"Встановлення", help:"Довідка", helpTitle:"Як користуватись",
     installHint:"Відкрий цей файл у браузері телефона → меню → «Додати на головний екран».", versionWord:"версія",
     confirmDelOrder:"Видалити це замовлення?", confirmDelClient:"Видалити клієнта? Його замовлення залишаться без клієнта.",
@@ -434,6 +435,7 @@ const I18N = {
     driveSyncing:"Syncing…", driveErrorS:"Sync error", driveOffline:"Offline", driveDone:"Synced",
     driveNeedLogin:"Google sign-in needed", driveUnavailable:"Sync only works in the online version (vh-ss.github.io)",
     driveHint:"Connect once — your data survives cache clears and device changes. If the app is empty, connect Drive to restore.",
+    driveOwnId:"Your own Google Client ID", driveOwnIdHint:"Create a dedicated OAuth client for this app and paste its ID here (for permanent use it's better baked into the code — send me the ID).",
     clearAll:"Clear all data", install:"Install", help:"Help / Guide", helpTitle:"How to use",
     installHint:"Open this file in your phone browser → menu → “Add to Home Screen”.", versionWord:"version",
     confirmDelOrder:"Delete this order?", confirmDelClient:"Delete client? Their orders stay without a client.",
@@ -1920,6 +1922,12 @@ function renderSettings(){
            <button class="btn sec" style="width:100%" onclick="driveDisconnect()">${t('driveDisconnect')}</button>`
         : `<button class="btn" style="width:100%" onclick="driveConnect()">${ico('up',16)} ${t('driveConnect')}</button>`}
       <div class="sub" style="margin-top:8px">${t('driveHint')}</div>
+      <details style="margin-top:10px">
+        <summary class="sub" style="cursor:pointer">${t('driveOwnId')}</summary>
+        <input id="driveCid" value="${esc((()=>{try{return localStorage.getItem('dropper.sync.clientId')||'';}catch(_){return'';}})())}" placeholder="…apps.googleusercontent.com" style="width:100%; margin-top:6px; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px">
+        <button class="btn sm sec" style="margin-top:6px" onclick="setDriveClientId(document.getElementById('driveCid').value)">${t('save')}</button>
+        <div class="sub" style="margin-top:4px">${t('driveOwnIdHint')}</div>
+      </details>
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
@@ -2089,13 +2097,18 @@ document.addEventListener('touchend',e=>{
 /* ============ Google Drive sync — durable storage that survives cache clears & device changes ============
    Stores one file `dropperua-data.json` in the app's private Drive appDataFolder (invisible in normal Drive).
    Same OAuth client as MoneyMe — works because both are served from the same origin (vh-ss.github.io). */
-const GCLIENT_ID='934338930225-arnhi5r45ptk1japnogvjqguob4q5mnv.apps.googleusercontent.com';
+const DROPPER_CLIENT_ID=''; // ← ВЛАСНИЙ OAuth client DropperUA (вписати, коли створено). Поки порожній — тимчасово спільний із MoneyMe.
+const GCLIENT_FALLBACK='934338930225-arnhi5r45ptk1japnogvjqguob4q5mnv.apps.googleusercontent.com'; // тимчасовий спільний vh-ss.github.io клієнт
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
 const DRIVE_FILE='dropperua-data.json';
 const GIS_SRC='https://accounts.google.com/gsi/client';
 const TOK_KEY='dropper.sync.token';
 const Sync={ on:(()=>{try{return localStorage.getItem('dropper.sync.on')==='1';}catch(_){return false;}})(), token:null, fileId:null, status:'off', tokenClient:null, pushTimer:null, busy:false, gisLoading:null, _res:null, _rej:null };
-function syncClientId(){ try{ return (GCLIENT_ID||localStorage.getItem('dropper.sync.clientId')||'').trim(); }catch(_){ return GCLIENT_ID; } }
+function syncClientId(){ try{ return (localStorage.getItem('dropper.sync.clientId')||DROPPER_CLIENT_ID||GCLIENT_FALLBACK||'').trim(); }catch(_){ return DROPPER_CLIENT_ID||GCLIENT_FALLBACK; } }
+function setDriveClientId(v){ v=(v||'').trim();
+  try{ if(v) localStorage.setItem('dropper.sync.clientId',v); else localStorage.removeItem('dropper.sync.clientId'); }catch(_){}
+  Sync.tokenClient=null; Sync.token=null; try{ localStorage.removeItem(TOK_KEY); }catch(_){} // reset so the new client takes effect
+  renderSettings(); }
 function syncAvailable(){ return location.protocol.indexOf('http')===0 && !!syncClientId(); }
 function localSavedAt(){ try{ return Number(localStorage.getItem('dropper.savedAt'))||0; }catch(_){ return 0; } }
 function dbIsEmpty(){ return !((db.orders||[]).length||(db.clients||[]).length||(db.stores||[]).length||(db.watches||[]).length); }
