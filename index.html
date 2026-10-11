@@ -2104,7 +2104,7 @@ document.addEventListener('touchend',e=>{
 /* ============ Google Drive sync — durable storage that survives cache clears & device changes ============
    Stores one file `dropperua-data.json` in the app's private Drive appDataFolder (invisible in normal Drive).
    Same OAuth client as MoneyMe — works because both are served from the same origin (vh-ss.github.io). */
-const DROPPER_CLIENT_ID=''; // ← ВЛАСНИЙ OAuth client DropperUA (вписати тут, коли створено). Поки порожній — синхронізація вимкнена, доки не встановиш свій client ID (окреме налаштування, без MoneyMe).
+const DROPPER_CLIENT_ID='209238675888-9em2j6l838qjleou9jbfipp6qa7sk4g4.apps.googleusercontent.com'; // власний OAuth client DropperUA (окремий проєкт Google, origin vh-ss.github.io)
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
 const DRIVE_FILE='dropperua-data.json';
 const GIS_SRC='https://accounts.google.com/gsi/client';
