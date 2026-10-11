@@ -1991,8 +1991,8 @@ async function fetchMonoRates(){
     j.forEach(x=>{
       const cur=MONO_CODES[x.currencyCodeA];
       if(cur && x.currencyCodeB===980){
-        const mid=(x.rateBuy&&x.rateSell)?(x.rateBuy+x.rateSell)/2:(x.rateCross||x.rateSell||x.rateBuy);
-        if(mid) uah[cur]=mid;
+        const sell=x.rateSell||x.rateCross||x.rateBuy; // курс ПРОДАЖУ (ти купуєш валюту за грн); rateCross — для валют без buy/sell
+        if(sell) uah[cur]=sell;
       }
     });
     const base=db.settings.base, baseUah=uah[base];
