@@ -1928,13 +1928,7 @@ function renderSettings(){
              ? `<button class="btn sec" style="width:100%; margin-bottom:8px" onclick="cloudSync(true)">${ico('refresh',16)} ${t('driveSyncNow')}</button>
                 <button class="btn sec" style="width:100%" onclick="driveDisconnect()">${t('driveDisconnect')}</button>`
              : `<button class="btn" style="width:100%" onclick="driveConnect()">${ico('up',16)} ${t('driveConnect')}</button>`}
-           <div class="sub" style="margin-top:8px">${t('driveHint')}</div>
-           <details style="margin-top:10px">
-             <summary class="sub" style="cursor:pointer">${t('driveOwnId')}</summary>
-             <input id="driveCid" value="${esc((()=>{try{return localStorage.getItem('dropper.sync.clientId')||'';}catch(_){return'';}})())}" placeholder="…apps.googleusercontent.com" style="width:100%; margin-top:6px; background:var(--card); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px">
-             <button class="btn sm sec" style="margin-top:6px" onclick="setDriveClientId(document.getElementById('driveCid').value)">${t('save')}</button>
-             <div class="sub" style="margin-top:4px">${t('driveOwnIdHint')}</div>
-           </details>`}
+           <div class="sub" style="margin-top:8px">${t('driveHint')}</div>`}
     </div>
     <div class="card">
       <div class="muted" style="margin-bottom:8px">${t('baseCurrency')}</div>
