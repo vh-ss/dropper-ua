@@ -640,7 +640,7 @@ function save(fromSync){
     catch(_){ try{ localStorage.removeItem(KEY+'_prev'); }catch(__){} } // no room → skip snapshot, data is already saved
   }
   // 3) mark change time + queue a Google Drive push (skipped when the write itself came FROM a sync pull)
-  if(!fromSync){ try{ localStorage.setItem('dropper.savedAt', String(Date.now())); }catch(_){} if(typeof cloudOnLocalChange==='function') cloudOnLocalChange(); }
+  if(!fromSync){ try{ localStorage.setItem('dropper.savedAt', String(Date.now())); localStorage.setItem('dropper.dirty','1'); }catch(_){} if(typeof cloudOnLocalChange==='function') cloudOnLocalChange(); }
 }
 let _uidCounter=0;
 function uid(){ return Date.now().toString(36)+'-'+(_uidCounter++).toString(36)+Math.floor(performance.now()*1000%100000).toString(36); }
@@ -2130,21 +2130,51 @@ function acquireToken(prompt){ return loadGIS().then(()=>{ ensureTokenClient(); 
 function getToken(interactive){ const c=getCachedToken(); if(c) return Promise.resolve(c); if(!interactive) return Promise.reject(new Error('need auth')); return acquireToken(interactive==='consent'?'consent':''); }
 async function driveFetch(url,opts){ const tok=await getToken(false); const o=Object.assign({},opts||{}); o.headers=Object.assign({},o.headers,{Authorization:'Bearer '+tok});
   let r=await fetch(url,o); if(r.status===401){ Sync.token=null; try{localStorage.removeItem(TOK_KEY);}catch(_){}; const t2=await getToken(true); o.headers.Authorization='Bearer '+t2; r=await fetch(url,o); } return r; }
-async function driveFind(){ const q=encodeURIComponent("name='"+DRIVE_FILE+"'"); const r=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id)&q='+q); if(!r.ok) throw new Error('list '+r.status); const j=await r.json(); return (j.files&&j.files[0])||null; }
+async function driveFind(){ const q=encodeURIComponent("name='"+DRIVE_FILE+"'"); const r=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,modifiedTime)&q='+q); if(!r.ok) throw new Error('list '+r.status); const j=await r.json(); return (j.files&&j.files[0])||null; }
 async function driveDownload(id){ const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media'); if(!r.ok) throw new Error('get '+r.status); return r.json(); }
-async function driveUpload(id,payload){ const body=JSON.stringify(payload);
-  if(id){ const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'application/json'},body}); if(!r.ok) throw new Error('upd '+r.status); return id; }
+// main data file — returns {id, modifiedTime} so we can cheaply detect remote changes next time
+async function driveUploadMain(id,payload){ const body=JSON.stringify(payload);
+  if(id){ const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media&fields=id,modifiedTime',{method:'PATCH',headers:{'Content-Type':'application/json'},body}); if(!r.ok) throw new Error('upd '+r.status); return r.json(); }
   const bnd='dp'+Math.random().toString(16).slice(2); const meta={name:DRIVE_FILE,parents:['appDataFolder']};
   const mp='--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bnd+'\r\nContent-Type: application/json\r\n\r\n'+body+'\r\n--'+bnd+'--';
-  const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:mp}); if(!r.ok) throw new Error('create '+r.status); return (await r.json()).id; }
+  const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:mp}); if(!r.ok) throw new Error('create '+r.status); return r.json(); }
+// ——— photos as separate immutable files att-<id> (so editing text doesn't re-upload photos) ———
+function usedPhotoIds(){ const s=new Set(); (db.orders||[]).forEach(o=>(o.items||[]).forEach(it=>{ if(isPhotoRef(it.photo)){ const id=it.photo.slice(4); if(PHOTOS[id]) s.add(id); } })); return s; }
+async function driveListAtts(){ const r=await driveFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=files(id,name)&q="+encodeURIComponent("name contains 'att-'")); if(!r.ok) throw new Error('attlist '+r.status); const j=await r.json(); const m={}; (j.files||[]).forEach(fl=>{ if(fl.name&&fl.name.indexOf('att-')===0) m[fl.name.slice(4)]=fl.id; }); return m; }
+async function driveUploadAtt(pid, dataURL){ const bnd='da'+Math.random().toString(16).slice(2); const meta={name:'att-'+pid, parents:['appDataFolder']};
+  const mp='--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bnd+'\r\nContent-Type: text/plain\r\n\r\n'+dataURL+'\r\n--'+bnd+'--';
+  const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:mp}); if(!r.ok) throw new Error('att up '+r.status); }
+async function driveDownloadAtt(fid){ const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media'); if(!r.ok) throw new Error('att get '+r.status); return r.text(); }
 function driveStatusText(){ if(!Sync.on) return t('driveOff');
   switch(Sync.status){ case 'syncing':return t('driveSyncing'); case 'error':return t('driveErrorS'); case 'offline':return t('driveOffline'); default:return t('driveOnIdle'); } }
 function setSyncStatus(s){ Sync.status=s; const el=document.getElementById('driveStatus'); if(el) el.textContent=driveStatusText();
   const st=document.getElementById('tab-settings'); if(st&&st.classList.contains('active')) renderSettings(); }
 function cloudOnLocalChange(){ if(!Sync.on||!syncAvailable()) return; clearTimeout(Sync.pushTimer);
   Sync.pushTimer=setTimeout(()=>{ if(Sync.on&&syncAvailable()&&navigator.onLine) cloudSync(false); }, 2500); }
-// Core sync. Last-write-wins by savedAt, with a HARD guard: empty local NEVER overwrites good cloud data,
-// and empty local + good cloud data → PULL (auto-restore after a cache clear).
+function _sflag(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
+function _sset(k,v){ try{ localStorage.setItem(k,v); }catch(_){} }
+function _sdel(k){ try{ localStorage.removeItem(k); }catch(_){} }
+// apply a remote data file locally: set db, pull in any photos we don't yet have (att-<id> files)
+async function applyRemote(remote){
+  db=normalize(remote.db);
+  migratePhotos(); // legacy v1 files had inline base64 → move into IDB
+  const need=[]; (db.orders||[]).forEach(o=>(o.items||[]).forEach(it=>{ if(isPhotoRef(it.photo)){ const id=it.photo.slice(4); if(!PHOTOS[id]) need.push(id); } }));
+  if(need.length){ const atts=await driveListAtts().catch(()=>({}));
+    for(const id of need){ const fid=atts[id]; if(fid){ try{ const du=await driveDownloadAtt(fid); if(du){ PHOTOS[id]=du; idbPut(id,du).catch(()=>{}); } }catch(_){} } } }
+  save(true); // write refs-only db locally; do not mark dirty / re-push
+}
+// upload only what changed: new photos (missing att files) + the small refs-only main file
+async function cloudPushFull(){
+  const ids=usedPhotoIds();
+  if(ids.size){ const remoteAtts=await driveListAtts().catch(()=>({}));
+    for(const id of ids){ if(!remoteAtts[id] && PHOTOS[id]){ await driveUploadAtt(id, PHOTOS[id]); } } }
+  const ts=localSavedAt()||Date.now();
+  const res=await driveUploadMain(Sync.fileId, {v:2, app:'dropperua', savedAt:ts, db:db}); // db keeps idb refs (no inline base64 → small)
+  Sync.fileId=res.id; _sset('dropper.savedAt', String(ts));
+  return res.modifiedTime;
+}
+// Core sync. Cheap: a background tick only fetches metadata; downloads/uploads the file only when something
+// actually changed. Last-write-wins by savedAt; empty local NEVER overwrites cloud and auto-restores from it.
 async function cloudSync(interactive){
   if(!syncAvailable()){ if(interactive) alert(t('driveUnavailable')); return; }
   if(!navigator.onLine){ setSyncStatus('offline'); if(interactive) alert(t('driveOffline')); return; }
@@ -2152,17 +2182,21 @@ async function cloudSync(interactive){
   try{
     try{ await getToken(interactive?'consent':false); }
     catch(e){ setSyncStatus(Sync.on?'error':'off'); if(interactive) alert(t('driveNeedLogin')); return; }
-    const f=await driveFind(); Sync.fileId=f?f.id:null;
-    const remote=f?await driveDownload(f.id).catch(()=>null):null;
+    const f=await driveFind(); Sync.fileId=f?f.id:null;          // metadata only (id + modifiedTime) — cheap
+    const dirty=_sflag('dropper.dirty')==='1', knownMod=_sflag('dropper.remoteMod')||'';
+    const remoteChanged=!!(f && f.modifiedTime!==knownMod);
+    if(f && !remoteChanged && !dirty && !dbIsEmpty()){ setSyncStatus('idle'); return; } // already in sync → no data transfer
+    // download the full file only when we might PULL (remote changed, or local empty needs restore)
+    const mightPull=remoteChanged || dbIsEmpty();
+    const remote=(f && mightPull)? await driveDownload(f.id).catch(()=>null) : null;
     const rSaved=(remote&&remote.savedAt)||0, lSaved=localSavedAt();
-    if(remote && remoteHasData(remote) && (rSaved>lSaved || dbIsEmpty())){
-      db=normalize(remote.db); migratePhotos(); save(true); try{ localStorage.setItem('dropper.savedAt', String(rSaved)); }catch(_){}
-      applyStaticTexts(); renderAll(); setSyncStatus('idle'); if(interactive) alert(t('driveDone')); return; // PULL / restore
+    if(remote && remoteHasData(remote) && (dbIsEmpty() || rSaved>lSaved)){      // PULL / restore
+      await applyRemote(remote); _sset('dropper.remoteMod', f.modifiedTime); _sset('dropper.savedAt', String(rSaved)); _sdel('dropper.dirty');
+      applyStaticTexts(); renderAll(); setSyncStatus('idle'); if(interactive) alert(t('driveDone')); return;
     }
-    if(dbIsEmpty() && remoteHasData(remote)){ setSyncStatus('idle'); return; } // safety: never push empty over cloud data
-    const ts=lSaved||Date.now();
-    Sync.fileId=await driveUpload(Sync.fileId, {v:1, app:'dropperua', savedAt:ts, db:dbWithInlinePhotos()}); // PUSH
-    try{ localStorage.setItem('dropper.savedAt', String(ts)); }catch(_){}
+    if(dbIsEmpty()){ setSyncStatus('idle'); return; }                           // nothing local to push
+    const newMod=await cloudPushFull();                                         // PUSH (dirty / local newer / no remote)
+    if(newMod) _sset('dropper.remoteMod', newMod); _sdel('dropper.dirty');
     setSyncStatus('idle'); if(interactive) alert(t('driveDone'));
   }catch(e){ console.error('sync', e); setSyncStatus('error'); if(interactive) alert(t('driveErrorS')); }
   finally{ Sync.busy=false; }
